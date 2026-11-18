@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Screen Desk</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: status line, screen tabs, ranked ledger of stocks with expandable filing trail */
+:root{
+  --bg:#f4f5f2;--surface:#fff;--fg:#1a221e;--muted:#5c6a63;--line:#dce2dc;--accent:#1f6f5c;
+  --hot:#b3261e;--hot-bg:#fbe4e1;--warm:#a85d0b;--warm-bg:#fbeedb;--cool:#5c6a63;--cool-bg:#eceeea;
+  --display:"Fraunces",Georgia,serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:light}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#111714;--surface:#19211d;--fg:#e3eae5;--muted:#96a59d;--line:#2a3430;--accent:#5fc0a4;
+  --hot:#ff8a80;--hot-bg:#3b1d1a;--warm:#f0a54a;--warm-bg:#3a2a14;--cool:#a3b0a9;--cool-bg:#252e2a;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--body)}
+.wrap{max-width:1000px;margin:0 auto;padding:28px 16px 60px;display:flex;flex-direction:column;gap:20px}
+h1{font:600 clamp(26px,5vw,34px)/1.1 var(--display);margin:0}
+.status{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 16px}
+.status b{color:var(--fg);font-weight:500}
+.status .err{color:var(--hot)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:7px 14px;border-radius:999px;font:500 13px var(--body);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.tab:focus-visible,.row:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.desc{color:var(--muted);margin:0;max-width:70ch}
+.tools{display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
+input[type=search]{flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);font:14px var(--body)}
+.list{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:14px;padding:12px 16px;border-top:1px solid var(--line);cursor:pointer;align-items:center}
+.row:first-child{border-top:0}
+.score{font:500 20px var(--mono);text-align:center;border-radius:8px;padding:4px 0;font-variant-numeric:tabular-nums}
+.s-hot{color:var(--hot);background:var(--hot-bg)}.s-warm{color:var(--warm);background:var(--warm-bg)}.s-cool{color:var(--cool);background:var(--cool-bg)}
+.name{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.meta{font:12px var(--mono);color:var(--muted)}
+.chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.chip{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--cool-bg);color:var(--fg)}
+.when{font:12px var(--mono);color:var(--muted);white-space:nowrap}
+.trail{grid-column:1/-1;border-left:2px solid var(--line);margin-left:24px;padding-left:14px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.trail a{color:var(--accent)}
+.trail .d{font-family:var(--mono);color:var(--muted);margin-right:8px}
+.empty{padding:32px 16px;text-align:center;color:var(--muted)}
+details{font-size:13px;color:var(--muted)}
+details pre{white-space:pre-wrap;font:12px var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;overflow-x:auto}
+@media (max-width:560px){.row{grid-template-columns:44px minmax(0,1fr)}.when{grid-column:2}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Screen Desk</h1></header>
+  <div class="status" id="status">Loading…</div>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <p class="desc" id="desc"></p>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Filter by company or scrip code" aria-label="Filter">
+    <label><input type="checkbox" id="above" checked> Only at or above threshold</label>
+  </div>
+  <div class="list" id="list"><div class="empty">Loading the latest run…</div></div>
+  <details><summary>Last run log</summary><pre id="log"></pre></details>
+</div>
+<script>
+let D=null,cur=null,open=new Set();
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function render(){
+  const s=D.screens[cur];$("desc").textContent=`${s.description} Looks back ${s.lookback_days} days; alert threshold ${s.threshold} points.`;
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",t.dataset.id===cur));
+  const q=$("q").value.trim().toLowerCase(),above=$("above").checked;
+  const rows=s.rows.filter(r=>(!above||r.score>=s.threshold)&&(!q||r.company.toLowerCase().includes(q)||r.scrip.includes(q)));
+  if(!rows.length){$("list").innerHTML=`<div class="empty">${s.rows.length?"No stocks match this filter.":"No stocks scored yet. History builds up over the first few runs."}</div>`;return}
+  $("list").innerHTML=rows.map(r=>{
+    const cls=r.score>=s.threshold+2?"s-hot":r.score>=s.threshold?"s-warm":"s-cool";
+    const chips=r.flags.map(f=>`<span class="chip">${esc(D.flag_labels[f]||f)} +${s.points[f]??0}</span>`).join("");
+    const trail=open.has(r.scrip)?`<div class="trail">${r.events.map(e=>`<div><span class="d">${esc(e.date)}</span>${esc(e.headline)}${e.pdf?` · <a href="${esc(e.pdf)}" target="_blank" rel="noopener">filing PDF</a>`:""}</div>`).join("")}<div><a href="${esc(r.page)}" target="_blank" rel="noopener">All announcements on BSE</a></div></div>`:"";
+    return `<div class="row" tabindex="0" data-s="${esc(r.scrip)}"><div class="score ${cls}">${r.score}</div><div><div class="name">${esc(r.company)}</div><div class="meta">BSE ${esc(r.scrip)} · ${r.events.length} flagged filing${r.events.length>1?"s":""}</div><div class="chips">${chips}</div></div><div class="when">last ${esc(r.last_event)}</div>${trail}</div>`}).join("");
+}
+function toggle(e){const row=e.target.closest(".row");if(!row||e.target.closest("a"))return;const s=row.dataset.s;open.has(s)?open.delete(s):open.add(s);render()}
+$("list").addEventListener("click",toggle);
+$("list").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle(e)}});
+$("q").addEventListener("input",render);$("above").addEventListener("change",render);
+fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{
+  D=d;const c=d.coverage;
+  $("status").innerHTML=`<span>Updated <b>${esc(d.generated)}</b></span><span>History <b>${esc(c.from||"–")} to ${esc(c.to||"–")}</b> (${c.days} of ${c.target_days} days)</span><span>Alerts sent <b>${d.alerts_sent}</b></span>${d.status!=="ok"?'<span class="err">Last run could not reach BSE</span>':""}`;
+  $("log").textContent=(d.log||[]).join("\n");
+  const ids=Object.keys(d.screens);cur=ids[0];
+  $("tabs").innerHTML=ids.map(id=>`<button class="tab" role="tab" data-id="${id}">${esc(d.screens[id].title)}</button>`).join("");
+  $("tabs").addEventListener("click",e=>{const t=e.target.closest(".tab");if(t){cur=t.dataset.id;open.clear();render()}});
+  render();
+}).catch(()=>{$("status").textContent="No results yet. The first run publishes them.";$("list").innerHTML='<div class="empty">Waiting for the first run.</div>'});
+</script>
+</body>
+</html>
