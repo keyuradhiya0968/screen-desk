@@ -1,0 +1,48 @@
+{
+ "generated": "2026-11-18 16:49 IST",
+ "coverage": {
+  "from": null,
+  "to": null,
+  "days": 0,
+  "target_days": 365
+ },
+ "status": "error",
+ "log": [
+  "2026-11-15: BSE did not answer (HTTP 403: '<HTML><HEAD>\\n<TITLE>Access Denied</TITLE>\\n</HEAD><BODY>\\n<H1>Access Denied</H1>\\n \\nYou don\\'t have permission to access \"ht')",
+  "2026-11-17: BSE did not answer (HTTP 403: '<HTML><HEAD>\\n<TITLE>Access Denied</TITLE>\\n</HEAD><BODY>\\n<H1>Access Denied</H1>\\n \\nYou don\\'t have permission to access \"ht')"
+ ],
+ "alerts_sent": 0,
+ "flag_labels": {
+  "name_change": "Name change",
+  "control_change": "Open offer / change in control",
+  "preferential": "Preferential issue / warrants",
+  "rights": "Rights issue",
+  "order_loi": "Order / LOI / MoU",
+  "price_query": "Exchange price/volume query",
+  "merger": "Merger / amalgamation",
+  "fund_raise": "Fund-raising approval",
+  "split_bonus": "Split / bonus",
+  "buzz_rename": "Buzzword rename"
+ },
+ "screens": {
+  "narrative": {
+   "title": "Narrative / operator",
+   "description": "Shell-style pattern: takeover, buzzword rename, cheap equity to promoters, order headlines, exchange price queries. Built from the Aerpace case.",
+   "threshold": 5,
+   "lookback_days": 365,
+   "points": {
+    "name_change": 2,
+    "control_change": 2,
+    "preferential": 2,
+    "price_query": 2,
+    "rights": 1,
+    "order_loi": 1,
+    "merger": 1,
+    "split_bonus": 1,
+    "fund_raise": 1,
+    "buzz_rename": 1
+   },
+   "rows": []
+  }
+ }
+}
