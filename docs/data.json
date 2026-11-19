@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-19 12:10 IST",
+ "generated": "2026-11-19 12:45 IST",
  "source": "NSE official RSS feeds",
  "coverage": {
   "from": "2026-11-19",
@@ -9,8 +9,8 @@
  },
  "status": "ok",
  "log": [
-  "announcements: 585 filings read (2026-11-19 to 2026-11-19), 13 new flagged",
-  "corporate_actions: 20 filings read (2026-11-19 to 2026-11-19), 2 new flagged",
+  "announcements: 615 filings read (2026-11-19 to 2026-11-19), 0 new flagged",
+  "corporate_actions: 20 filings read (2026-11-19 to 2026-11-19), 0 new flagged",
   "board_meetings: 1 filings read (2026-11-19 to 2026-11-19), 0 new flagged",
   "offer_documents: 17 filings read (2026-09-30 to 2026-11-18), 0 new flagged",
   "related_party: 20 filings read (2026-03-12 to 2026-09-11), 0 new flagged"
