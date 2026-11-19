@@ -1,15 +1,19 @@
 {
- "generated": "2026-11-19 08:19 IST",
+ "generated": "2026-11-19 12:10 IST",
+ "source": "NSE official RSS feeds",
  "coverage": {
-  "from": null,
-  "to": null,
-  "days": 0,
+  "from": "2026-11-19",
+  "to": "2026-11-19",
+  "days": 1,
   "target_days": 365
  },
- "status": "error",
+ "status": "ok",
  "log": [
-  "2026-11-16: BSE did not answer (HTTP 403: '<HTML><HEAD>\\n<TITLE>Access Denied</TITLE>\\n</HEAD><BODY>\\n<H1>Access Denied</H1>\\n \\nYou don\\'t have permission to access \"ht')",
-  "2026-11-18: BSE did not answer (HTTP 403: '<HTML><HEAD>\\n<TITLE>Access Denied</TITLE>\\n</HEAD><BODY>\\n<H1>Access Denied</H1>\\n \\nYou don\\'t have permission to access \"ht')"
+  "announcements: 585 filings read (2026-11-19 to 2026-11-19), 13 new flagged",
+  "corporate_actions: 20 filings read (2026-11-19 to 2026-11-19), 2 new flagged",
+  "board_meetings: 1 filings read (2026-11-19 to 2026-11-19), 0 new flagged",
+  "offer_documents: 17 filings read (2026-09-30 to 2026-11-18), 0 new flagged",
+  "related_party: 20 filings read (2026-03-12 to 2026-09-11), 0 new flagged"
  ],
  "alerts_sent": 0,
  "flag_labels": {
@@ -42,7 +46,113 @@
     "fund_raise": 1,
     "buzz_rename": 1
    },
-   "rows": []
+   "rows": [
+    {
+     "scrip": "VEDANT FASHIONS LIMITED",
+     "company": "Vedant Fashions Limited",
+     "page": "https://nsearchives.nseindia.com/corporate/MANYAVAR_19112026115330_OutcomeofBM19112026.pdf",
+     "score": 2,
+     "flags": [
+      "control_change"
+     ],
+     "last_event": "2026-11-19",
+     "events": [
+      {
+       "date": "2026-11-19",
+       "headline": "Vedant Fashions Limited has informed the Exchange about change in Management viz.. appointment of Chief Financial Officer & Key Managerial Personnel in the Company. |SUBJECT: Change in Management",
+       "pdf": "https://nsearchives.nseindia.com/corporate/MANYAVAR_19112026115330_OutcomeofBM19112026.pdf",
+       "page": "https://nsearchives.nseindia.com/corporate/MANYAVAR_19112026115330_OutcomeofBM19112026.pdf",
+       "flags": [
+        "control_change"
+       ]
+      }
+     ]
+    },
+    {
+     "scrip": "ONYX BIOTEC LIMITED",
+     "company": "Onyx Biotec Limited",
+     "page": "https://nsearchives.nseindia.com/corporate/team_sandeshc_19112026112510_ONYX.zip",
+     "score": 2,
+     "flags": [
+      "control_change"
+     ],
+     "last_event": "2026-11-19",
+     "events": [
+      {
+       "date": "2026-11-19",
+       "headline": "VC Corporate Advisors Private Limited has Submitted to the Exchange a copy of post offer advertisement to the public shareholders of the Onyx Biotec Limited (Target Company). |SUBJECT: Public Announcement-Open Offer",
+       "pdf": "",
+       "page": "https://nsearchives.nseindia.com/corporate/team_sandeshc_19112026112510_ONYX.zip",
+       "flags": [
+        "control_change"
+       ]
+      }
+     ]
+    },
+    {
+     "scrip": "SANGAM (INDIA) LIMITED",
+     "company": "Sangam (India) Limited",
+     "page": "https://nsearchives.nseindia.com/corporate/SANGAMIND_19112026113256_NSE_Reply_19-11-2026_sign.pdf",
+     "score": 2,
+     "flags": [
+      "price_query"
+     ],
+     "last_event": "2026-11-19",
+     "events": [
+      {
+       "date": "2026-11-19",
+       "headline": "Significant increase in volume has been observed in Sangam (India) Limited. The Exchange, in order to ensure that investors have latest relevant information about the company and to inform the market place so that the interest of the investors is safeguarded, had written to the company. Sangam (India) Limited has submitted their response. |SUBJECT: Spurt in Volume",
+       "pdf": "https://nsearchives.nseindia.com/corporate/SANGAMIND_19112026113256_NSE_Reply_19-11-2026_sign.pdf",
+       "page": "https://nsearchives.nseindia.com/corporate/SANGAMIND_19112026113256_NSE_Reply_19-11-2026_sign.pdf",
+       "flags": [
+        "price_query"
+       ]
+      }
+     ]
+    },
+    {
+     "scrip": "RPSG VENTURES LIMITED",
+     "company": "RPSG VENTURES LIMITED",
+     "page": "https://nsearchives.nseindia.com/corporate/RPSGVENT_19112026105344_NSE_reply_signed.pdf",
+     "score": 2,
+     "flags": [
+      "price_query"
+     ],
+     "last_event": "2026-11-19",
+     "events": [
+      {
+       "date": "2026-11-19",
+       "headline": "Significant increase in volume has been observed in RPSG VENTURES LIMITED. The Exchange, in order to ensure that investors have latest relevant information about the company and to inform the market place so that the interest of the investors is safeguarded, had written to the company. RPSG VENTURES LIMITED has submitted their response. |SUBJECT: Spurt in Volume",
+       "pdf": "https://nsearchives.nseindia.com/corporate/RPSGVENT_19112026105344_NSE_reply_signed.pdf",
+       "page": "https://nsearchives.nseindia.com/corporate/RPSGVENT_19112026105344_NSE_reply_signed.pdf",
+       "flags": [
+        "price_query"
+       ]
+      }
+     ]
+    },
+    {
+     "scrip": "SUBROS LIMITED",
+     "company": "Subros Limited",
+     "page": "https://nsearchives.nseindia.com/corporate/SUBROS_19112026103722_ClarificationonIncreaseinsharevolume19112026.pdf",
+     "score": 2,
+     "flags": [
+      "price_query"
+     ],
+     "last_event": "2026-11-19",
+     "events": [
+      {
+       "date": "2026-11-19",
+       "headline": "Significant increase in volume has been observed in Subros Limited. The Exchange, in order to ensure that investors have latest relevant information about the company and to inform the market place so that the interest of the investors is safeguarded, had written to the company. Subros Limited has submitted their response. |SUBJECT: Spurt in Volume",
+       "pdf": "https://nsearchives.nseindia.com/corporate/SUBROS_19112026103722_ClarificationonIncreaseinsharevolume19112026.pdf",
+       "page": "https://nsearchives.nseindia.com/corporate/SUBROS_19112026103722_ClarificationonIncreaseinsharevolume19112026.pdf",
+       "flags": [
+        "price_query"
+       ]
+      }
+     ]
+    }
+   ]
   }
  }
 }
