@@ -1,1 +1,1 @@
-"""Keyur's stock screens."""
+"""Screen Desk: stock screens built from NSE public data."""

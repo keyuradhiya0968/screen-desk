@@ -1,7 +1,11 @@
-"""Scheduled run: read NSE's official RSS feeds, keep flagged filings, score screens, publish, alert.
+"""Scheduled run: refresh NSE data, run every screen, publish the dashboard data, send alerts.
 
-Run locally or in GitHub Actions:  python -m screener.run
+    python -m screener.run
+
+To add a screen: create screener/screen_<name>.py with ID, TITLE, DESCRIPTION, RULES and run(ctx),
+then add it to SCREENS below.
 """
+import csv
 import json
 import os
 import sys
@@ -11,70 +15,196 @@ from pathlib import Path
 
 import requests
 
-from . import nse_feeds
-from .screens import FLAGS, SCREENS, flags_for, has_buzzword
+from . import nse
+from . import screen_breakout, screen_bulk_deals, screen_corporate_actions, screen_narrative
+
+SCREENS = [screen_breakout, screen_corporate_actions, screen_narrative, screen_bulk_deals]
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data"
-DOCS = ROOT / "docs"
+DATA, DOCS = ROOT / "data", ROOT / "docs"
+PRICES, W52 = DATA / "prices", DATA / "w52"
 IST = timezone(timedelta(hours=5, minutes=30))
-HISTORY_DAYS = max(s["lookback_days"] for s in SCREENS.values())
-ALERT_RECENT_DAYS = 3
+KEEP_DAYS = 65            # trading days of price history kept
+MAX_PRICE_FETCHES = 70    # per run, so a first run backfills in one go
+SPARK_DAYS = 60
 
 
 def load(path, default):
     try:
-        return json.loads(path.read_text())
+        return json.loads(Path(path).read_text())
     except (FileNotFoundError, ValueError):
         return default
 
 
 def save(path, obj):
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, indent=1, ensure_ascii=False))
+    path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
 
 
-def d(s):
-    return date.fromisoformat(s)
+# ---------------- data refresh ----------------
+
+def refresh_stock_list(state, log):
+    stocks = load(DATA / "stocks.json", {})
+    if stocks and state.get("stocks_date", "") >= (date.today() - timedelta(days=7)).isoformat():
+        return stocks
+    try:
+        fresh = nse.stock_list()
+        if fresh:
+            save(DATA / "stocks.json", fresh)
+            state["stocks_date"] = date.today().isoformat()
+            log.append(f"Stock list: {len(fresh)} symbols")
+            return fresh
+    except nse.Blocked as e:
+        log.append(f"Stock list not refreshed ({e})")
+    return stocks
 
 
-def score(flagged, today):
+def refresh_prices(state, log, now):
+    PRICES.mkdir(parents=True, exist_ok=True)
+    have = {p.stem for p in PRICES.glob("*.csv")}
+    holidays = set(state.get("holidays", []))
+    today = now.date()
+    days, d = [], today
+    while len(days) < KEEP_DAYS + 25:
+        if d.weekday() < 5:
+            days.append(d)
+        d -= timedelta(days=1)
+    fetched = 0
+    for d in days:
+        iso = d.isoformat()
+        if iso in have or iso in holidays:
+            continue
+        if d == today and now.hour < 18:          # today's file is published in the evening
+            continue
+        if fetched >= MAX_PRICE_FETCHES or len(have) >= KEEP_DAYS and iso < min(have):
+            break
+        fetched += 1
+        try:
+            rows = nse.bhav(d)
+        except nse.Missing:
+            if d < today:
+                holidays.add(iso)
+            continue
+        except nse.Blocked as e:
+            log.append(f"Prices: NSE refused this run ({e}); will retry next run")
+            break
+        with open(PRICES / f"{iso}.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(nse.PRICE_FIELDS)
+            w.writerows(rows)
+        have.add(iso)
+    for old in sorted(have)[:-KEEP_DAYS]:
+        (PRICES / f"{old}.csv").unlink(missing_ok=True)
+        have.discard(old)
+    state["holidays"] = sorted(h for h in holidays if h >= (today - timedelta(days=200)).isoformat())
+    log.append(f"Prices: {len(have)} trading days stored ({fetched} files requested this run)")
+
+
+def load_prices():
+    px = {}
+    for p in sorted(PRICES.glob("*.csv")):
+        day = {}
+        with open(p, newline="") as f:
+            for r in csv.DictReader(f):
+                row = {k: (float(v) if v not in ("", None) and k not in ("symbol", "series") else v or None)
+                       for k, v in r.items()}
+                day[r["symbol"]] = row
+        px[p.stem] = day
+    return px
+
+
+def refresh_w52(dates, log):
+    W52.mkdir(parents=True, exist_ok=True)
     out = {}
-    for sid, s in SCREENS.items():
-        start = today - timedelta(days=s["lookback_days"])
-        by_co = {}
-        for a in flagged:
-            if not a.get("date") or d(a["date"]) < start:
+    for d in dates[-5:]:
+        f = W52 / f"{d}.json"
+        if not f.exists():
+            try:
+                data = nse.week52(date.fromisoformat(d))
+                save(f, {s: v[0] for s, v in data.items() if v[1] == d})
+            except nse.Missing:
+                save(f, {})
+            except (nse.Blocked, StopIteration) as e:
+                log.append(f"52-week file for {d} not read ({e})")
                 continue
-            if not any(f in s["points"] for f in a["flags"]):
-                continue
-            c = by_co.setdefault(a["scrip"], {"scrip": a["scrip"], "company": a["company"],
-                                              "page": a["page"], "events": [], "flags": set()})
-            c["events"].append(a)
-            c["flags"].update(f for f in a["flags"] if f in s["points"])
-        rows = []
-        for c in by_co.values():
-            pts = sum(s["points"][f] for f in c["flags"])
-            reasons = sorted(c["flags"], key=lambda f: -s["points"][f])
-            if "name_change" in c["flags"] and has_buzzword(c["company"]):
-                pts += s.get("buzz_rename_bonus", 0)
-                reasons.append("buzz_rename")
-            c["events"].sort(key=lambda a: a["date"], reverse=True)
-            rows.append({
-                "scrip": c["scrip"], "company": c["company"], "page": c["page"], "score": pts,
-                "flags": reasons, "last_event": c["events"][0]["date"],
-                "events": [{k: a.get(k, "") for k in ("date", "headline", "pdf", "page", "flags")}
-                           for a in c["events"][:25]],
-            })
-        rows.sort(key=lambda r: r["last_event"], reverse=True)
-        rows.sort(key=lambda r: r["score"], reverse=True)
-        out[sid] = {
-            "title": s["title"], "description": s["description"], "threshold": s["threshold"],
-            "lookback_days": s["lookback_days"],
-            "points": {**s["points"], "buzz_rename": s.get("buzz_rename_bonus", 0)},
-            "rows": [r for r in rows if r["score"] >= 2][:400],
-        }
+        out[d] = load(f, {})
+    for f in W52.glob("*.json"):
+        if f.stem not in dates[-5:]:
+            f.unlink()
     return out
+
+
+def refresh_feeds(state, log, name_to_sym, today):
+    filings = load(DATA / "filings.json", [])
+    actions = load(DATA / "corp_actions.json", [])
+    old = DATA / "flagged.json"                      # migrate the first version's store
+    if old.exists():
+        import re as _re
+        for a in load(old, []):
+            m = _re.search(r"\s+-\s+Ex-Date:\s*(.+)$", a.get("company", ""), _re.I)
+            item = {"id": a["id"], "feed": a.get("feed", ""), "company": a["company"][:m.start()] if m else a["company"],
+                    "ex_date": nse._date(m.group(1)) if m else "", "text": a.get("headline", ""),
+                    "date": a.get("date", ""), "link": a.get("pdf") or a.get("page", "")}
+            (actions if item["feed"] == "corporate_actions" else filings).append(item)
+        old.unlink()
+    seen = {a["id"] for a in filings} | {a["id"] for a in actions}
+    ok = 0
+    for feed in nse.RSS:
+        try:
+            items = nse.rss(feed)
+        except (nse.Blocked, nse.Missing, ValueError) as e:
+            log.append(f"Feed {feed}: not read ({e})")
+            continue
+        ok += 1
+        new = 0
+        for it in items:
+            if it["id"] in seen:
+                continue
+            seen.add(it["id"])
+            if feed == "corporate_actions":
+                actions.append(it)
+                new += 1
+            elif screen_narrative.flags_for(it["text"]):
+                filings.append(it)
+                new += 1
+        log.append(f"Feed {feed}: {len(items)} items, {new} new kept")
+    for a in filings + actions:                      # attach NSE symbols by company name
+        if not a.get("symbol"):
+            a["symbol"] = name_to_sym.get(nse.norm_name(a["company"]), "")
+    cutoff = (today - timedelta(days=400)).isoformat()
+    filings = [a for a in filings if a.get("date", "") >= cutoff]
+    actions = [a for a in actions if (a.get("ex_date") or a.get("date", "")) >= (today - timedelta(days=10)).isoformat()]
+    save(DATA / "filings.json", filings)
+    save(DATA / "corp_actions.json", actions)
+    return filings, actions, ok
+
+
+def refresh_deals(log):
+    store = load(DATA / "deals.json", [])
+    try:
+        new = nse.deals()
+    except (nse.Blocked, nse.Missing) as e:
+        log.append(f"Bulk/block deals not read ({e})")
+        new = []
+    keys = {(d["date"], d["symbol"], d["client"], d["side"], d["qty"], d["kind"]) for d in store}
+    for d in new:
+        k = (d["date"], d["symbol"], d["client"], d["side"], d["qty"], d["kind"])
+        if k not in keys:
+            store.append(d)
+            keys.add(k)
+    keep = sorted({d["date"] for d in store if d.get("date")})[-15:]
+    store = [d for d in store if d.get("date") in keep]
+    save(DATA / "deals.json", store)
+    if new:
+        log.append(f"Deals: {len(new)} today, {len(store)} stored")
+    return store
+
+
+# ---------------- alerts ----------------
+
+def esc(s):
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def telegram(text):
@@ -83,101 +213,99 @@ def telegram(text):
         return False
     try:
         requests.post(f"https://api.telegram.org/bot{token}/sendMessage", timeout=20, data={
-            "chat_id": chat, "text": text[:4000], "parse_mode": "HTML",
-            "disable_web_page_preview": "true"})
+            "chat_id": chat, "text": text[:4000], "parse_mode": "HTML", "disable_web_page_preview": "true"})
         return True
     except requests.RequestException:
         return False
 
 
-def esc(s):
-    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def alerts(results, state, today):
-    sent = set(state.get("alerted", []))
-    msgs = []
-    for sid, res in results.items():
-        for r in res["rows"]:
-            if r["score"] < res["threshold"]:
-                continue
-            fresh = []
-            for e in r["events"]:
-                key = f"{sid}:{r['scrip']}:{e['date']}:{e['headline'][:60]}"
-                if (today - d(e["date"])).days <= ALERT_RECENT_DAYS and key not in sent:
-                    fresh.append(e)
-                    sent.add(key)
-            if fresh:
-                lines = [f"<b>{esc(r['company'])}</b> · {esc(res['title'])} score <b>{r['score']}</b>"]
-                for e in fresh[:3]:
-                    link = e.get("pdf") or e.get("page")
-                    tail = f' <a href="{link}">filing</a>' if link else ""
-                    lines.append(f"• {e['date']}: {esc(e['headline'][:160])}{tail}")
-                msgs.append("\n".join(lines))
-    state["alerted"] = sorted(sent)[-5000:]
-    return msgs
-
+# ---------------- main ----------------
 
 def main():
     t0 = time.time()
-    today = datetime.now(IST).date()
-    flagged = load(DATA / "flagged.json", [])
+    now = datetime.now(IST)
+    today = now.date()
     state = load(DATA / "state.json", {})
-    known = {a["id"] for a in flagged}
-    log, ok_feeds, session = [], 0, requests.Session()
+    log, status = [], {}
 
-    for feed_id in nse_feeds.FEEDS:
+    stocks = refresh_stock_list(state, log)
+    name_to_sym = {nse.norm_name(n): s for s, n in stocks.items()}
+    refresh_prices(state, log, now)
+    px = load_prices()
+    dates = sorted(px)
+    w52 = refresh_w52(dates, log) if dates else {}
+    filings, actions, feeds_ok = refresh_feeds(state, log, name_to_sym, today)
+    deals = refresh_deals(log)
+    status["prices"] = f"{dates[0]} to {dates[-1]}" if dates else "none yet"
+    status["feeds"] = f"{feeds_ok}/{len(nse.RSS)} read"
+
+    ctx = {"today": today, "dates": dates, "px": px, "w52_new_highs": w52,
+           "last_price": px[dates[-1]] if dates else {}, "filings": filings,
+           "corp_actions": actions, "deals": deals}
+
+    stocks_out, screens_out = {}, []
+    for scr in SCREENS:
         try:
-            items = nse_feeds.fetch(feed_id, session)
-        except (RuntimeError, ValueError) as e:   # ValueError covers malformed XML
-            log.append(str(e))
-            continue
-        ok_feeds += 1
-        hits = 0
-        for a in items:
-            if a["id"] in known:
-                continue
-            f = flags_for(a)
-            if f:
-                a["flags"] = f
-                a["date"] = a["date"] or today.isoformat()
-                flagged.append(a)
-                known.add(a["id"])
-                hits += 1
-        dates = sorted(x["date"] for x in items if x["date"])
-        span = f"{dates[0]} to {dates[-1]}" if dates else "no dates"
-        log.append(f"{feed_id}: {len(items)} filings read ({span}), {hits} new flagged")
-        time.sleep(2)
+            hits = scr.run(ctx) if (dates or scr.ID not in ("breakout",)) else []
+        except Exception as e:                       # one broken screen must not stop the others
+            log.append(f"Screen {scr.ID} failed: {type(e).__name__}: {e}")
+            hits = []
+        latest = max((h["date"] for h in hits), default="")
+        screens_out.append({"id": scr.ID, "title": scr.TITLE, "description": scr.DESCRIPTION,
+                            "rules": scr.RULES, "count": len({h["symbol"] for h in hits})})
+        for h in hits:
+            s = stocks_out.setdefault(h["symbol"], {"symbol": h["symbol"], "hits": {}, "events": []})
+            prev = s["hits"].get(scr.ID)
+            if not prev or h["date"] > prev["date"]:
+                s["hits"][scr.ID] = {k: h[k] for k in ("score", "tags", "summary", "metrics", "date", "alert")}
+            for e in h.get("events", []):
+                s["events"].append({**e, "screen": scr.ID})
 
-    if ok_feeds:
-        state.setdefault("since", today.isoformat())
-        state["last_ok"] = datetime.now(IST).strftime("%Y-%m-%d %H:%M")
+    # price context for every stock shown
+    spark_dates = dates[-SPARK_DAYS:]
+    last = ctx["last_price"]
+    for sym, s in stocks_out.items():
+        s["matched"] = sym in stocks
+        s["name"] = stocks.get(sym) or sym.title()
+        r = last.get(sym)
+        if r and r.get("close"):
+            hist = [px[d][sym]["volume"] for d in dates[-21:-1] if sym in px[d] and px[d][sym]["volume"]]
+            s.update(close=r["close"], series=r["series"],
+                     chg=round((r["close"] / r["prev"] - 1) * 100, 2) if r.get("prev") else None,
+                     vol_x=round(r["volume"] / (sum(hist) / len(hist)), 1) if hist and r.get("volume") else None,
+                     deliv=r.get("deliv_pct"),
+                     turnover_cr=round((r.get("turnover_lacs") or 0) / 100, 2))
+        s["spark"] = {"c": [px[d][sym]["close"] if sym in px[d] else None for d in spark_dates],
+                      "v": [px[d][sym]["volume"] if sym in px[d] else None for d in spark_dates]}
+        s["events"].sort(key=lambda e: e.get("date", ""), reverse=True)
+        s["events"] = s["events"][:30]
+        s["score"] = max(h["score"] for h in s["hits"].values())
+        s["last"] = max(h["date"] for h in s["hits"].values())
 
-    cutoff = today - timedelta(days=HISTORY_DAYS + 30)
-    flagged = [a for a in flagged if a.get("date") and d(a["date"]) >= cutoff]
+    # alerts: each screen hit once
+    sent = set(state.get("alerted", []))
+    lines = []
+    for sym, s in sorted(stocks_out.items(), key=lambda kv: -kv[1]["score"]):
+        for sid, h in s["hits"].items():
+            key = f"{sid}:{sym}:{h['date']}"
+            if h["alert"] and key not in sent:
+                sent.add(key)
+                title = next(x["title"] for x in screens_out if x["id"] == sid)
+                lines.append(f"<b>{esc(s['name'])}</b> ({sym}) · {esc(title)}\n{esc(h['summary'])}")
+    state["alerted"] = sorted(sent)[-8000:]
+    if lines:
+        telegram("📈 <b>Screen Desk</b>\n\n" + "\n\n".join(lines[:20]) +
+                 (f"\n\n+{len(lines) - 20} more on the dashboard" if len(lines) > 20 else ""))
 
-    results = score(flagged, today)
-    msgs = alerts(results, state, today)
-    if msgs:
-        telegram("🔎 <b>New screen hits</b>\n\n" + "\n\n".join(msgs[:15]))
-    if not ok_feeds:
-        telegram("⚠️ Screener run could not reach NSE's feeds. Dashboard shows the last good data.")
-
-    since = state.get("since")
-    save(DATA / "flagged.json", flagged)
     save(DATA / "state.json", state)
     save(DOCS / "data.json", {
-        "generated": datetime.now(IST).strftime("%Y-%m-%d %H:%M IST"),
-        "source": "NSE official RSS feeds",
-        "coverage": {"from": since, "to": today.isoformat() if ok_feeds else state.get("last_ok", "")[:10],
-                     "days": (today - d(since)).days + 1 if since else 0, "target_days": HISTORY_DAYS},
-        "status": "ok" if ok_feeds else "error",
-        "log": log, "alerts_sent": len(msgs),
-        "flag_labels": {k: v[0] for k, v in FLAGS.items()} | {"buzz_rename": "Buzzword rename"},
-        "screens": results,
+        "generated": now.strftime("%Y-%m-%d %H:%M IST"), "status": status, "log": log,
+        "alerts_sent": len(lines), "screens": screens_out, "spark_dates": spark_dates,
+        "stocks": sorted(stocks_out.values(), key=lambda s: (-s["score"], s["symbol"])),
     })
     print("\n".join(log))
-    print(f"Done in {time.time() - t0:.0f}s, {ok_feeds}/{len(nse_feeds.FEEDS)} feeds read, {len(msgs)} alerts")
+    print(f"Done in {time.time() - t0:.0f}s · " + " · ".join(f"{x['title']}: {x['count']}" for x in screens_out)
+          + f" · {len(lines)} alerts")
     return 0
 
 

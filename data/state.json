@@ -1,5 +1,1 @@
-{
- "alerted": [],
- "since": "2026-11-19",
- "last_ok": "2026-11-19 12:45"
-}
+{"alerted":["breakout:GREENLAM:2026-11-18","breakout:HONASA:2026-11-18","breakout:MONOLITH:2026-11-18","breakout:NRL:2026-11-18","breakout:PGIL:2026-11-18","breakout:SBIN:2026-11-18","breakout:WSI:2026-11-18"],"since":"2026-11-19","last_ok":"2026-11-19 12:45","stocks_date":"2026-11-19","holidays":[]}

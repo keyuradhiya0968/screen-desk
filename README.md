@@ -1,34 +1,33 @@
 # Screen Desk
 
-Daily stock screens built from BSE corporate filings. Every point a stock scores links to the filing behind it.
+Personal stock screens for Indian equities, built only from public NSE files. Runs on GitHub every two hours (8 AM to 10 PM IST) and publishes a dashboard at `https://<username>.github.io/screen-desk/`.
 
-- Runs on GitHub's servers at 07:30 IST (Mon–Sat) and 18:00 IST (Mon–Fri). Nothing to install.
-- Dashboard: `https://<your-username>.github.io/screen-desk/`
-- Alerts: Telegram message when a stock at or above a screen's threshold files something new.
+## Screens
 
-## First screen: Narrative / operator
+| Screen | File | What it finds |
+|---|---|---|
+| Volume breakout | `screener/screen_breakout.py` | Close above the 20-day high or a new 52-week high, volume ≥ 2× the 20-day average, delivery ≥ 50%, traded value ≥ ₹1 crore |
+| Corporate actions | `screener/screen_corporate_actions.py` | Upcoming dividends, splits, bonus and rights with the last day to buy; alerts on dividends yielding ≥ 3% with ≥ 2 trading days left |
+| Narrative / operator | `screener/screen_narrative.py` | Control changes, preferential issues/warrants, exchange volume queries, order headlines; alert at 5 points |
+| Bulk & block deals | `screener/screen_bulk_deals.py` | Large disclosed trades over 10 sessions, netted per stock |
 
-Built from the Aerpace Industries case. Over the last 365 days of filings, a stock gets points for:
+Each screen keeps its numbers in a `P = {...}` block (or constants) at the top of its file.
 
-| Flag | Points |
-|---|---|
-| Name change | 2 |
-| Open offer / change in control | 2 |
-| Preferential issue / warrants | 2 |
-| Exchange price/volume clarification | 2 |
-| Rights issue, order/LOI/MoU, merger, split/bonus, fund-raise approval | 1 each |
-| Renamed and current name has a buzzword (drone, aero, AI, green, EV…) | +1 |
+## Adding a screen
 
-Threshold: 5 points.
+1. Create `screener/screen_<name>.py` with `ID`, `TITLE`, `DESCRIPTION`, `RULES` and `run(ctx)` returning hits.
+2. Add it to `SCREENS` in `screener/run.py`.
 
-## Files
+## Data (all from nsearchives.nseindia.com)
 
-- `screener/bse.py` reads BSE's announcement feed, one day at a time
-- `screener/screens.py` holds the flags and screens (add new screens here)
-- `screener/run.py` runs daily: fetch, score, publish, alert
-- `docs/index.html` is the dashboard; `docs/data.json` holds the latest results
-- `data/` holds the flagged filings history (only filings that hit a flag are kept)
+- Daily prices and delivery: `sec_bhavdata_full_DDMMYYYY.csv` (65 trading days kept in `data/prices/`)
+- 52-week highs: `CM_52_wk_High_low_DDMMYYYY.csv`
+- Bulk and block deals: `bulk.csv`, `block.csv`
+- Filings and corporate actions: NSE RSS feeds
+- Stock list: `EQUITY_L.csv`, `SME_EQUITY_L.csv`
 
-## History build-up
+NSE sometimes refuses a whole run; the next run usually gets through, and the dashboard keeps the last good data.
 
-The first run reads the last few days, then backfills about 45 days per run. The full 365 days take about 8 runs (around 4 days). Until then, scores only count the history collected so far; the dashboard shows the coverage.
+## Updating the code
+
+Upload `update.zip` to the top of the repository. The **Apply update** workflow unpacks it, removes files listed in its `DELETE.txt`, runs the screens and saves.
