@@ -1,0 +1,51 @@
+name: Data source probe
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Check which NSE files GitHub can read
+        shell: python
+        run: |
+          import time, datetime as dt, requests
+          UA = {"User-Agent": "screen-desk/1.0 (personal research)", "Accept": "*/*"}
+          A = "https://nsearchives.nseindia.com"
+          days = [dt.date.today() - dt.timedelta(days=i) for i in range(1, 8)]
+          days = [d for d in days if d.weekday() < 5][:3]
+          tests = [
+            ("Corporate actions RSS (ex-dates)", [A + "/content/RSS/Corporate_action.xml"]),
+            ("Financial results RSS", [A + "/content/RSS/Financial_Results.xml"]),
+            ("Insider trading RSS", [A + "/content/RSS/Insider_Trading.xml"]),
+            ("List of all NSE stocks", [A + "/content/equities/EQUITY_L.csv"]),
+            ("SME stocks list", [A + "/emerge/corporates/content/SME_EQUITY_L.csv"]),
+            ("Bulk deals (today)", [A + "/content/equities/bulk.csv"]),
+            ("Block deals (today)", [A + "/content/equities/block.csv"]),
+            ("Daily prices + delivery %", [A + f"/products/content/sec_bhavdata_full_{d:%d%m%Y}.csv" for d in days]),
+            ("52-week high/low", [A + f"/content/CM_52_wk_High_low_{d:%d%m%Y}.csv" for d in days]),
+            ("Market activity report", [A + f"/archives/equities/market-activity/MA{d:%d%m%y}.csv" for d in days]),
+          ]
+          s = requests.Session()
+          for name, urls in tests:
+              result = "NOT AVAILABLE"
+              for u in urls:
+                  try:
+                      r = s.get(u, headers=UA, timeout=30)
+                      body = r.content
+                      if r.status_code == 200 and body and b"Access Denied" not in body[:300]:
+                          first = body[:160].decode("utf-8", "replace").replace("\n", " | ")
+                          result = f"OK  {len(body):>9,} bytes  {u.rsplit('/',1)[1]}  ->  {first}"
+                          break
+                      result = f"HTTP {r.status_code}  {u.rsplit('/',1)[1]}"
+                  except Exception as e:
+                      result = f"ERROR {type(e).__name__}"
+                  time.sleep(1.2)
+              print(f"{name:34} {result}", flush=True)
+              time.sleep(1.2)
