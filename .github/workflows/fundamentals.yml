@@ -1,0 +1,43 @@
+name: Fundamentals refresh
+
+# Nightly: downloads annual statements from Yahoo Finance for liquid NSE stocks (about a week
+# to cycle through all of them), then rebuilds the dashboard.
+on:
+  schedule:
+    - cron: "15 18 * * *"    # 23:45 IST every night
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screen-run
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt yfinance
+      - name: Download annual statements
+        continue-on-error: true
+        run: python -m screener.fundamentals_fetch
+      - name: Rebuild dashboard
+        continue-on-error: true
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m screener.run
+      - name: Save
+        run: |
+          git config user.name "screen-bot"
+          git config user.email "screen-bot@users.noreply.github.com"
+          git add data docs/data.json
+          git diff --cached --quiet || git commit -m "Fundamentals refresh $(date -u +%F)"
+          git pull --rebase
+          git push
