@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-18 19:12 IST",
+ "generated": "2026-11-19 08:19 IST",
  "coverage": {
   "from": null,
   "to": null,
@@ -8,8 +8,8 @@
  },
  "status": "error",
  "log": [
-  "2026-11-15: BSE did not answer (HTTP 403: '<HTML><HEAD>\\n<TITLE>Access Denied</TITLE>\\n</HEAD><BODY>\\n<H1>Access Denied</H1>\\n \\nYou don\\'t have permission to access \"ht')",
-  "2026-11-17: BSE did not answer (HTTP 403: '<HTML><HEAD>\\n<TITLE>Access Denied</TITLE>\\n</HEAD><BODY>\\n<H1>Access Denied</H1>\\n \\nYou don\\'t have permission to access \"ht')"
+  "2026-11-16: BSE did not answer (HTTP 403: '<HTML><HEAD>\\n<TITLE>Access Denied</TITLE>\\n</HEAD><BODY>\\n<H1>Access Denied</H1>\\n \\nYou don\\'t have permission to access \"ht')",
+  "2026-11-18: BSE did not answer (HTTP 403: '<HTML><HEAD>\\n<TITLE>Access Denied</TITLE>\\n</HEAD><BODY>\\n<H1>Access Denied</H1>\\n \\nYou don\\'t have permission to access \"ht')"
  ],
  "alerts_sent": 0,
  "flag_labels": {
