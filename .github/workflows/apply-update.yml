@@ -1,10 +1,10 @@
 name: Apply update
 
-# Upload update.zip to the top of the repository and this unpacks it into the right folders,
+# Upload update.zip (any .zip name works) to the top of the repository and this unpacks it into the right folders,
 # removes old files listed in DELETE.txt, runs the screens once and saves everything.
 on:
   push:
-    paths: ["update.zip"]
+    paths: ["*.zip"]
   workflow_dispatch: {}
 
 permissions:
@@ -22,13 +22,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Unpack update.zip
         run: |
-          if [ ! -f update.zip ]; then echo "No update.zip in the repository"; exit 0; fi
-          unzip -o update.zip -d .
+          Z="$(ls -1t -- *.zip 2>/dev/null | head -1)"
+          if [ -z "$Z" ]; then echo "No .zip file in the repository"; exit 0; fi
+          echo "Unpacking: $Z"
+          unzip -o "$Z" -d .
           if [ -f DELETE.txt ]; then
             while IFS= read -r f; do [ -n "$f" ] && git rm -r -q --ignore-unmatch "$f"; done < DELETE.txt
             rm -f DELETE.txt
           fi
-          git rm -q update.zip
+          git rm -q -- *.zip
           echo "Files now in the repository:"; git ls-files; find screener docs -type f | sort
       - uses: actions/setup-python@v5
         with:
