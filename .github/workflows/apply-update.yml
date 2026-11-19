@@ -1,1 +1,50 @@
+name: Apply update
 
+# Upload update.zip to the top of the repository and this unpacks it into the right folders,
+# removes old files listed in DELETE.txt, runs the screens once and saves everything.
+on:
+  push:
+    paths: ["update.zip"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screen-run
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack update.zip
+        run: |
+          if [ ! -f update.zip ]; then echo "No update.zip in the repository"; exit 0; fi
+          unzip -o update.zip -d .
+          if [ -f DELETE.txt ]; then
+            while IFS= read -r f; do [ -n "$f" ] && git rm -r -q --ignore-unmatch "$f"; done < DELETE.txt
+            rm -f DELETE.txt
+          fi
+          git rm -q update.zip
+          echo "Files now in the repository:"; git ls-files; find screener docs -type f | sort
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Run screens once
+        continue-on-error: true
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m screener.run
+      - name: Save
+        run: |
+          git config user.name "screen-bot"
+          git config user.email "screen-bot@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Apply update"
+          git pull --rebase
+          git push
