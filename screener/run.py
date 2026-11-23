@@ -2,8 +2,12 @@
 
     python -m screener.run
 
-To add a screen: create screener/screen_<name>.py with ID, TITLE, DESCRIPTION, RULES and run(ctx),
-then add it to SCREENS below.
+Screens live in four groups (the dashboard's tabs):
+  technical    screener/screens_technical.py     price, volume, delivery
+  fundamental  screener/screens_fundamental.py   annual and quarterly statements (nightly fetch)
+  combined     screener/screens_combined.py      recipes: one technical + one fundamental screen
+  events       screen_corporate_actions.py, screen_narrative.py, screen_bulk_deals.py
+To add a screen, add a class to the right file and list it in that file's SCREENS.
 """
 import csv
 import json
@@ -13,20 +17,28 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+import numpy as np
 import requests
 
-from . import nse
-from . import screen_breakout, screen_bulk_deals, screen_corporate_actions, screen_fundamentals, screen_narrative
+from . import nse, screens_combined, screens_fundamental, screens_technical
+from . import screen_bulk_deals, screen_corporate_actions, screen_narrative
+from .tech import History, rs_ranks
 
-SCREENS = [screen_breakout, screen_fundamentals, screen_corporate_actions, screen_narrative, screen_bulk_deals]
+GROUPS = [
+    {"id": "technical", "title": "Technical", "blurb": "Price, volume and delivery signals"},
+    {"id": "fundamental", "title": "Fundamental", "blurb": "Business quality, growth and price"},
+    {"id": "combined", "title": "Combined", "blurb": "Stocks on a technical and a fundamental screen at once"},
+    {"id": "events", "title": "Events", "blurb": "Corporate actions, filings and large deals"},
+]
+EVENT_SCREENS = [screen_corporate_actions, screen_narrative, screen_bulk_deals]
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA, DOCS = ROOT / "data", ROOT / "docs"
 PRICES, W52 = DATA / "prices", DATA / "w52"
 IST = timezone(timedelta(hours=5, minutes=30))
-KEEP_DAYS = 65            # trading days of price history kept
-MAX_PRICE_FETCHES = 70    # per run, so a first run backfills in one go
-SPARK_DAYS = 60
+KEEP_DAYS = 260           # trading days of price history kept (about a year)
+MAX_PRICE_FETCHES = 220   # per run, so the backfill to a year takes one or two runs
+SPARK_DAYS = 120
 
 
 def load(path, default):
@@ -97,21 +109,8 @@ def refresh_prices(state, log, now):
     for old in sorted(have)[:-KEEP_DAYS]:
         (PRICES / f"{old}.csv").unlink(missing_ok=True)
         have.discard(old)
-    state["holidays"] = sorted(h for h in holidays if h >= (today - timedelta(days=200)).isoformat())
+    state["holidays"] = sorted(h for h in holidays if h >= (today - timedelta(days=420)).isoformat())
     log.append(f"Prices: {len(have)} trading days stored ({fetched} files requested this run)")
-
-
-def load_prices():
-    px = {}
-    for p in sorted(PRICES.glob("*.csv")):
-        day = {}
-        with open(p, newline="") as f:
-            for r in csv.DictReader(f):
-                row = {k: (float(v) if v not in ("", None) and k not in ("symbol", "series") else v or None)
-                       for k, v in r.items()}
-                day[r["symbol"]] = row
-        px[p.stem] = day
-    return px
 
 
 def refresh_w52(dates, log):
@@ -219,42 +218,22 @@ def telegram(text):
         return False
 
 
+
+
 # ---------------- main ----------------
 
-def main():
-    t0 = time.time()
-    now = datetime.now(IST)
-    today = now.date()
-    state = load(DATA / "state.json", {})
-    log, status = [], {}
+def _r(x, nd=2):
+    return None if x is None or (isinstance(x, float) and x != x) else round(float(x), nd)
 
-    stocks = refresh_stock_list(state, log)
-    name_to_sym = {nse.norm_name(n): s for s, n in stocks.items()}
-    refresh_prices(state, log, now)
-    px = load_prices()
-    dates = sorted(px)
-    w52 = refresh_w52(dates, log) if dates else {}
-    filings, actions, feeds_ok = refresh_feeds(state, log, name_to_sym, today)
-    deals = refresh_deals(log)
-    status["prices"] = f"{dates[0]} to {dates[-1]}" if dates else "none yet"
-    status["feeds"] = f"{feeds_ok}/{len(nse.RSS)} read"
 
-    ctx = {"today": today, "dates": dates, "px": px, "w52_new_highs": w52,
-           "last_price": px[dates[-1]] if dates else {}, "filings": filings,
-           "corp_actions": actions, "deals": deals,
-           "fundamentals": {p.stem: load(p, {}) for p in (DATA / "fundamentals").glob("*.json")}}
-    fstored = len(ctx["fundamentals"])
-    status["fundamentals"] = f"{fstored} stocks" if fstored else "first nightly fetch pending"
-
-    stocks_out, screens_out = {}, []
-    for scr in SCREENS:
+def run_group(group, screens, ctx, log, stocks_out, screens_out):
+    for scr in screens:
         try:
-            hits = scr.run(ctx) if (dates or scr.ID not in ("breakout",)) else []
+            hits = scr.run(ctx)
         except Exception as e:                       # one broken screen must not stop the others
             log.append(f"Screen {scr.ID} failed: {type(e).__name__}: {e}")
             hits = []
-        latest = max((h["date"] for h in hits), default="")
-        screens_out.append({"id": scr.ID, "title": scr.TITLE, "description": scr.DESCRIPTION,
+        screens_out.append({"id": scr.ID, "group": group, "title": scr.TITLE, "description": scr.DESCRIPTION,
                             "rules": scr.RULES, "count": len({h["symbol"] for h in hits})})
         for h in hits:
             s = stocks_out.setdefault(h["symbol"], {"symbol": h["symbol"], "hits": {}, "events": []})
@@ -264,52 +243,124 @@ def main():
                 s["hits"][scr.ID]["alert_key"] = h.get("alert_key", h["date"])
             for e in h.get("events", []):
                 s["events"].append({**e, "screen": scr.ID})
+    return stocks_out
 
-    # price context for every stock shown
+
+def main():
+    t0 = time.time()
+    now = datetime.now(IST)
+    today = now.date()
+    state = load(DATA / "state.json", {})
+    log, status = [], {}
+
+    # ---- data
+    stocks = refresh_stock_list(state, log)
+    name_to_sym = {nse.norm_name(n): s for s, n in stocks.items()}
+    refresh_prices(state, log, now)
+    H = History(PRICES)
+    dates = H.dates
+    w52 = refresh_w52(dates, log) if dates else {}
+    filings, actions, feeds_ok = refresh_feeds(state, log, name_to_sym, today)
+    deals = refresh_deals(log)
+    rs = rs_ranks(H) if dates else {}
+    last_price = {s: {"close": float(H.C[i, -1])} for i, s in enumerate(H.syms) if not np.isnan(H.C[i, -1])}
+    fm = {}
+    for p in (DATA / "fundamentals").glob("*.json"):
+        f = load(p, {})
+        try:
+            m = screens_fundamental.metrics(f, (last_price.get(p.stem) or {}).get("close"))
+        except (TypeError, KeyError, IndexError, ZeroDivisionError):
+            m = None
+        if m:
+            fm[p.stem] = m
+    status["prices"] = f"{dates[0]} to {dates[-1]} ({len(dates)} days)" if dates else "none yet"
+    status["feeds"] = f"{feeds_ok}/{len(nse.RSS)} read"
+    status["fundamentals"] = f"{len(fm)} stocks" if fm else "first nightly fetch pending"
+
+    ctx = {"today": today, "H": H, "dates": dates, "rs": rs, "w52_new_highs": w52, "last_price": last_price,
+           "filings": filings, "corp_actions": actions, "deals": deals, "fm": fm}
+
+    # ---- screens: events first, because the penny screen excludes story stocks
+    stocks_out, screens_out = {}, []
+    run_group("events", EVENT_SCREENS, ctx, log, stocks_out, screens_out)
+    ctx["narrative_syms"] = {s for s, st in stocks_out.items() if "narrative" in st["hits"]}
+    screens_technical._LISTED.clear()
+    screens_technical._LISTED.update(stocks)
+    if dates:
+        run_group("technical", screens_technical.SCREENS, ctx, log, stocks_out, screens_out)
+    if fm:
+        run_group("fundamental", screens_fundamental.SCREENS, ctx, log, stocks_out, screens_out)
+    order = {g["id"]: k for k, g in enumerate(GROUPS)}
+    screens_out.sort(key=lambda x: order[x["group"]])
+    recipes = []
+    for rc in screens_combined.RECIPES:
+        syms = screens_combined.match(stocks_out, rc)
+        recipes.append({**rc, "count": len(syms)})
+
+    # ---- per-stock context for the table and the side panel
     spark_dates = dates[-SPARK_DAYS:]
-    last = ctx["last_price"]
     for sym, s in stocks_out.items():
         s["matched"] = sym in stocks
         s["name"] = stocks.get(sym) or sym.title()
-        r = last.get(sym)
-        if r and r.get("close"):
-            hist = [px[d][sym]["volume"] for d in dates[-21:-1] if sym in px[d] and px[d][sym]["volume"]]
-            s.update(close=r["close"], series=r["series"],
-                     chg=round((r["close"] / r["prev"] - 1) * 100, 2) if r.get("prev") else None,
-                     vol_x=round(r["volume"] / (sum(hist) / len(hist)), 1) if hist and r.get("volume") else None,
-                     deliv=r.get("deliv_pct"),
-                     turnover_cr=round((r.get("turnover_lacs") or 0) / 100, 2))
-        s["spark"] = {"c": [px[d][sym]["close"] if sym in px[d] else None for d in spark_dates],
-                      "v": [px[d][sym]["volume"] if sym in px[d] else None for d in spark_dates]}
+        i = H.idx.get(sym)
+        if i is not None and not np.isnan(H.C[i, -1]):
+            c, prev, v = H.C[i, -1], H.PREV[i, -1], H.V[i, -1]
+            avg = H.mean(H.V[i], 20, H.T - 2, 0.6)
+            s.update(series=H.series[i], close=_r(c), chg=_r((c / prev - 1) * 100) if prev and prev == prev else None,
+                     vol_x=_r(v / avg, 1) if avg and v == v else None, deliv=_r(H.DP[i, -1], 1),
+                     turnover_cr=_r(H.TO[i, -1] / 100, 2), rs=rs.get(sym))
+            c_arr = H.C[i, -SPARK_DAYS:]
+            m50 = [H.mean(H.C[i], 50, H.T - SPARK_DAYS + k if H.T >= SPARK_DAYS else k, 0.8) for k in range(len(c_arr))]
+            s["spark"] = {"c": [_r(x) for x in c_arr], "v": [None if x != x else int(x) for x in H.V[i, -SPARK_DAYS:]],
+                          "m50": [_r(x) for x in m50]}
+        m = fm.get(sym)
+        if m:
+            s["fund"] = {k: _r(m[k]) for k in ("mcap_cr", "pe", "pb", "roce", "roe", "sales_cagr", "profit_cagr",
+                                               "de", "div_yield", "cfo_pat")}
         s["events"].sort(key=lambda e: e.get("date", ""), reverse=True)
         s["events"] = s["events"][:30]
         s["score"] = max(h["score"] for h in s["hits"].values())
-        s["last"] = max(h["date"] for h in s["hits"].values())
 
-    # alerts: each screen hit once
+    # ---- alerts: single screens that carry an alert, plus recipes whose technical signal is from the latest session
     sent = set(state.get("alerted", []))
+    title = {x["id"]: x["title"] for x in screens_out}
     lines = []
     for sym, s in sorted(stocks_out.items(), key=lambda kv: -kv[1]["score"]):
         for sid, h in s["hits"].items():
-            key = f"{sid}:{sym}:{h.pop('alert_key', h['date'])}"
+            key = f"{sid}:{sym}:{h.pop('alert_key')}"
             if h["alert"] and key not in sent:
                 sent.add(key)
-                title = next(x["title"] for x in screens_out if x["id"] == sid)
-                lines.append(f"<b>{esc(s['name'])}</b> ({sym}) · {esc(title)}\n{esc(h['summary'])}")
-    state["alerted"] = sorted(sent)[-8000:]
+                lines.append(f"<b>{esc(s['name'])}</b> ({sym}) · {esc(title[sid])}\n{esc(h['summary'])}")
+    for rc in recipes:
+        for sym in screens_combined.match(stocks_out, rc):
+            th = stocks_out[sym]["hits"][rc["tech"]]
+            key = f"recipe:{rc['id']}:{sym}:{th['date']}"
+            if dates and th["date"] == dates[-1] and key not in sent:
+                sent.add(key)
+                fh = stocks_out[sym]["hits"][rc["fund"]]
+                lines.insert(0, f"⭐ <b>{esc(stocks_out[sym]['name'])}</b> ({sym}) · {esc(rc['title'])}\n"
+                                f"{esc(th['summary'])}\n{esc(fh['summary'])}")
+    state["alerted"] = sorted(sent)[-12000:]
     if lines:
         telegram("📈 <b>Screen Desk</b>\n\n" + "\n\n".join(lines[:20]) +
                  (f"\n\n+{len(lines) - 20} more on the dashboard" if len(lines) > 20 else ""))
 
+    payload = {"groups": GROUPS, "screens": screens_out, "recipes": recipes, "spark_dates": spark_dates,
+               "stocks": sorted(stocks_out.values(), key=lambda s: (-s["score"], s["symbol"]))}
+    # Only rewrite the dashboard file when the results changed, so the repository does not grow
+    # by a full copy every two hours when nothing new happened.
+    import hashlib
+    digest = hashlib.sha1(json.dumps([payload, status], sort_keys=True, default=str).encode()).hexdigest()
+    if digest != state.get("data_hash") or not (DOCS / "data.json").exists():
+        state["data_hash"] = digest
+        save(DOCS / "data.json", {"generated": now.strftime("%Y-%m-%d %H:%M IST"), "status": status, "log": log,
+                                  "alerts_sent": len(lines), **payload})
+    else:
+        log.append("No change in results; dashboard file left as is")
     save(DATA / "state.json", state)
-    save(DOCS / "data.json", {
-        "generated": now.strftime("%Y-%m-%d %H:%M IST"), "status": status, "log": log,
-        "alerts_sent": len(lines), "screens": screens_out, "spark_dates": spark_dates,
-        "stocks": sorted(stocks_out.values(), key=lambda s: (-s["score"], s["symbol"])),
-    })
     print("\n".join(log))
     print(f"Done in {time.time() - t0:.0f}s · " + " · ".join(f"{x['title']}: {x['count']}" for x in screens_out)
-          + f" · {len(lines)} alerts")
+          + " · " + " · ".join(f"{r['title']}: {r['count']}" for r in recipes) + f" · {len(lines)} alerts")
     return 0
 
 

@@ -1,35 +1,31 @@
 # Screen Desk
 
-Personal stock screens for Indian equities, built only from public NSE files. Runs on GitHub every two hours (8 AM to 10 PM IST) and publishes a dashboard at `https://<username>.github.io/screen-desk/`.
+Personal stock screens for Indian equities. Dashboard: `https://<username>.github.io/screen-desk/`
 
-## Screens
+Four sections (tabs on the dashboard):
 
-| Screen | File | What it finds |
+| Section | File | Screens |
 |---|---|---|
-| Volume breakout | `screener/screen_breakout.py` | Close above the 20-day high or a new 52-week high, volume ≥ 2× the 20-day average, delivery ≥ 50%, traded value ≥ ₹1 crore |
-| Corporate actions | `screener/screen_corporate_actions.py` | Upcoming dividends, splits, bonus and rights with the last day to buy; alerts on dividends yielding ≥ 3% with ≥ 2 trading days left |
-| Narrative / operator | `screener/screen_narrative.py` | Control changes, preferential issues/warrants, exchange volume queries, order headlines; alert at 5 points |
-| Bulk & block deals | `screener/screen_bulk_deals.py` | Large disclosed trades over 10 sessions, netted per stock |
-| Fundamentally good | `screener/screen_fundamentals.py` | 10-point scorecard: ROCE, ROE, sales and profit growth, cash conversion, debt, interest cover, PEG. Listed from 6, alert at 8 |
+| Technical | `screener/screens_technical.py` | Volume breakout · Near 52-week high · Delivery accumulation · Pullback in uptrend · Tight base · Relative strength leaders |
+| Fundamental | `screener/screens_fundamental.py` | Quality compounder · Growth · Value · Penny (clean) · Turnaround · Dividend payers |
+| Combined | `screener/screens_combined.py` | Recipes pairing one technical and one fundamental screen (Quality breakout, Growth near highs, Value being accumulated, and more); the dashboard also pairs any two by hand |
+| Events | `screen_corporate_actions.py`, `screen_narrative.py`, `screen_bulk_deals.py` | Corporate actions with last day to buy · Narrative / operator pattern · Bulk & block deals |
 
-Each screen keeps its numbers in a `P = {...}` block (or constants) at the top of its file.
+Each screen's rules and thresholds sit at the top of its class.
 
-## Adding a screen
+## Alerts (Telegram, once set up)
 
-1. Create `screener/screen_<name>.py` with `ID`, `TITLE`, `DESCRIPTION`, `RULES` and `run(ctx)` returning hits.
-2. Add it to `SCREENS` in `screener/run.py`.
+- Combined recipes, when the technical signal is from the latest session (marked ⭐)
+- Quality compounder reaching 9/10 for the first time
+- Dividends yielding ≥ 3% with ≥ 2 trading days left to buy
+- Narrative / operator pattern reaching 5 points
 
-## Data (all from nsearchives.nseindia.com)
+## Schedules
 
-- Daily prices and delivery: `sec_bhavdata_full_DDMMYYYY.csv` (65 trading days kept in `data/prices/`)
-- 52-week highs: `CM_52_wk_High_low_DDMMYYYY.csv`
-- Bulk and block deals: `bulk.csv`, `block.csv`
-- Filings and corporate actions: NSE RSS feeds
-- Stock list: `EQUITY_L.csv`, `SME_EQUITY_L.csv`
-- Annual statements: Yahoo Finance via yfinance (free, unofficial), fetched nightly by `screener/fundamentals_fetch.py` into `data/fundamentals/`, each stock about once a week
+- **Daily screen run**: every 2 hours, 8 AM to 10 PM IST. NSE prices (kept for 260 trading days), 52-week highs, deals, RSS filings.
+- **Fundamentals refresh**: nightly. Annual and quarterly statements from Yahoo Finance (yfinance) for NSE stocks trading ≥ ₹0.2 crore a day, each refreshed about weekly.
+- **Apply update**: when a `.zip` is uploaded to the top of the repository; unpacks it, removes files in `DELETE.txt`, runs the screens.
 
-NSE sometimes refuses a whole run; the next run usually gets through, and the dashboard keeps the last good data.
+## Data
 
-## Updating the code
-
-Upload `update.zip` to the top of the repository. The **Apply update** workflow unpacks it, removes files listed in its `DELETE.txt`, runs the screens and saves.
+NSE public files from nsearchives.nseindia.com (`sec_bhavdata_full`, `CM_52_wk_High_low`, `bulk.csv`, `block.csv`, RSS feeds, `EQUITY_L.csv`) and Yahoo Finance via yfinance. Yahoo data is unofficial: treat fundamental screens as shortlists and check the annual report.

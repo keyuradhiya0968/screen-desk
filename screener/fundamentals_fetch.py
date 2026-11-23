@@ -2,7 +2,7 @@
 
     python -m screener.fundamentals_fetch
 
-Universe: NSE main-board stocks that trade at least ₹0.5 crore a day on average (from our own
+Universe: NSE main-board stocks that trade at least ₹0.2 crore a day on average (from our own
 price files). Each stock is refreshed about once a week, oldest first, within a time budget,
 so Yahoo is not hit too hard. Results go to data/fundamentals/<SYMBOL>.json.
 
@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PRICES, OUT = ROOT / "data" / "prices", ROOT / "data" / "fundamentals"
 IST = timezone(timedelta(hours=5, minutes=30))
-MIN_TURNOVER_LACS = 50          # ₹0.5 crore average daily traded value
+MIN_TURNOVER_LACS = 20          # ₹0.2 crore average daily traded value (wide enough for small caps)
 REFRESH_DAYS = 7
 BUDGET_MIN = float(os.environ.get("FUND_BUDGET_MIN", "55"))
 PAUSE = 1.0
@@ -40,6 +40,7 @@ ROWS = {
     "shares": ["Ordinary Shares Number", "Share Issued"],
     "cfo": ["Operating Cash Flow", "Cash Flow From Continuing Operating Activities"],
     "capex": ["Capital Expenditure"],
+    "dividends": ["Cash Dividends Paid", "Common Stock Dividend Paid"],
 }
 
 
@@ -83,7 +84,7 @@ def fetch_one(yf, symbol):
     out, years = {"symbol": symbol, "asof": date.today().isoformat()}, None
     where = {"revenue": "inc", "net_income": "inc", "ebit": "inc", "interest": "inc",
              "assets": "bal", "cur_liab": "bal", "equity": "bal", "debt": "bal", "cash": "bal",
-             "receivables": "bal", "shares": "bal", "cfo": "cf", "capex": "cf"}
+             "receivables": "bal", "shares": "bal", "cfo": "cf", "capex": "cf", "dividends": "cf"}
     for field, names in ROWS.items():
         cols, vals = _series(statements[where[field]], names)
         if cols and (years is None or len(cols) > len(years)) and where[field] == "inc":
@@ -93,12 +94,18 @@ def fetch_one(yf, symbol):
     out["years"] = years
     for field in ROWS:                                 # align every field to the income-statement years
         out[field] = [out[field].get(y) for y in years]
+    out["ttm_net_income"], out["q_dates"], out["q_revenue"], out["q_net_income"] = None, [], [], []
     try:
         q = t.quarterly_income_stmt
-        _, qn = _series(q, ROWS["net_income"])
+        qd, qn = _series(q, ROWS["net_income"])
+        qd2, qr = _series(q, ROWS["revenue"])
+        out["q_dates"] = qd or qd2 or []
+        out["q_net_income"] = qn[-8:]
+        out["q_revenue"] = qr[-8:]
+        out["q_dates"] = out["q_dates"][-8:]
         out["ttm_net_income"] = sum(qn[-4:]) if len(qn) >= 4 and all(v is not None for v in qn[-4:]) else None
     except Exception:
-        out["ttm_net_income"] = None
+        pass
     return out
 
 
@@ -117,7 +124,8 @@ def main():
 
     def age(s):
         try:
-            return json.loads((OUT / f"{s}.json").read_text()).get("asof", "")
+            f = json.loads((OUT / f"{s}.json").read_text())
+            return f.get("asof", "") if "q_revenue" in f else ""      # older files lack quarterly data: refetch
         except (FileNotFoundError, ValueError):
             return ""
     todo = sorted((s for s in syms if age(s) < stale), key=age)

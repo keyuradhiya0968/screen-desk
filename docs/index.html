@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Source+Sans+3:wght@400;600;700&display=swap">
 <style>
-/* Layout: masthead, screen summary strip, control bar, sortable ledger, slide-in stock panel. Warm paper, ink, one teal accent. */
+/* Layout: masthead, four section tabs (Technical, Fundamental, Combined, Events), screen strip, control bar, sortable ledger, slide-in stock panel. Warm paper, ink, one teal accent. */
 :root{
   --paper:#fcf1e6; --paper-2:#f6e6d6; --card:#fff8f1; --ink:#26211d; --muted:#6e625a; --rule:#e4d3c3; --rule-2:#d6c2af;
   --accent:#0f5f66; --accent-soft:#dcebe8; --up:#0b6b47; --down:#a3242f; --warn:#8c1d40;
@@ -124,53 +124,81 @@ footer{margin-top:26px;color:var(--muted);font-size:12.5px;display:flex;flex-dir
 footer pre{white-space:pre-wrap;font-size:12px;background:var(--card);border:1px solid var(--rule);padding:10px;border-radius:4px}
 @media (prefers-reduced-motion:reduce){.panel,.scrim{transition:none}}
 @media (max-width:700px){.mast h1{font-size:32px}.count{margin-left:0;width:100%}}
+
+/* section tabs */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--rule);overflow-x:auto}
+.tab{all:unset;cursor:pointer;padding:14px 20px 12px;font:600 19px/1.1 var(--serif);color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap;display:flex;align-items:baseline;gap:8px}
+.tab .tc{font:600 12px var(--sans);color:var(--muted);letter-spacing:.03em}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.blurb{color:var(--muted);font-size:13.5px;padding:10px 0 0}
+/* combined */
+.recipes{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));border-bottom:1px solid var(--rule);border-left:1px solid var(--rule)}
+.rcp{all:unset;cursor:pointer;padding:14px 16px;border-right:1px solid var(--rule);border-top:1px solid var(--rule);display:flex;flex-direction:column;gap:5px}
+.rcp:hover{background:var(--paper-2)}
+.rcp[aria-pressed="true"]{background:var(--accent-soft);box-shadow:inset 0 3px 0 var(--accent)}
+.rcp:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.rcp .rt{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-weight:600}
+.rcp .rn{font:600 24px/1 var(--serif)}
+.rcp .rw{font-size:12.5px;color:var(--muted)}
+.rcp .pair{display:flex;gap:6px;flex-wrap:wrap}
+select{font:14px var(--sans);padding:7px 10px;border:1px solid var(--rule-2);border-radius:4px;background:var(--card);color:var(--ink)}
+.plus{color:var(--muted);font-weight:600}
+.zero{opacity:.55}
+.panel .fund{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px 12px;font-size:13px}
+.panel .fund div span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="mast">
-    <div><h1>Screen Desk</h1><div class="sub" id="sub">Indian equities · NSE public data</div></div>
+    <div><h1>Screen Desk</h1><div class="sub">Indian equities · NSE public data and Yahoo Finance statements</div></div>
     <div class="status" id="status">Loading…</div>
   </header>
 
-  <nav class="strip" id="strip" aria-label="Screens"></nav>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
+  <div class="blurb" id="blurb"></div>
 
-  <details class="rules"><summary>How each screen works</summary><div class="rg" id="rules"></div></details>
+  <section id="single">
+    <div class="strip" id="strip" aria-label="Screens in this section"></div>
+    <details class="rules"><summary>How these screens work</summary><div class="rg" id="rules"></div></details>
+    <div class="bar">
+      <div class="dd">
+        <button class="btn" id="ddBtn" aria-haspopup="true" aria-expanded="false">Screens: <b id="ddLabel">All</b> ▾</button>
+        <div class="menu" id="menu" hidden></div>
+      </div>
+      <span class="seg-l">Show stocks in</span>
+      <div class="seg" role="group" aria-label="Match">
+        <button id="mAny" aria-pressed="true">any selected</button>
+        <button id="mAll" aria-pressed="false">all selected</button>
+      </div>
+      <input type="search" id="q" placeholder="Search company or symbol" aria-label="Search">
+      <label class="chk"><input type="checkbox" id="alertsOnly"> Alerts only</label>
+      <span class="count" id="count"></span>
+    </div>
+  </section>
 
-  <div class="bar">
-    <div class="dd">
-      <button class="btn" id="ddBtn" aria-haspopup="true" aria-expanded="false">Screens: <b id="ddLabel">All</b> ▾</button>
-      <div class="menu" id="menu" hidden></div>
+  <section id="combo" hidden>
+    <div class="recipes" id="recipes" aria-label="Recipes"></div>
+    <div class="bar">
+      <span class="seg-l">Or pair any two:</span>
+      <select id="cTech" aria-label="Technical screen"></select><span class="plus">+</span>
+      <select id="cFund" aria-label="Fundamental screen"></select>
+      <input type="search" id="q2" placeholder="Search company or symbol" aria-label="Search">
+      <span class="count" id="count2"></span>
     </div>
-    <span class="seg-l">Show stocks in</span>
-    <div class="seg" role="group" aria-label="Match">
-      <button id="mAny" aria-pressed="true">any selected</button>
-      <button id="mAll" aria-pressed="false">all selected</button>
-    </div>
-    <input type="search" id="q" placeholder="Search company or symbol" aria-label="Search">
-    <label class="chk"><input type="checkbox" id="alertsOnly"> Alerts only</label>
-    <span class="count" id="count"></span>
-  </div>
+  </section>
 
   <div class="tbl-wrap">
     <table>
-      <thead><tr>
-        <th data-k="name">Company<span class="ar"></span></th>
-        <th>Screens</th>
-        <th>Why it is here</th>
-        <th class="num" data-k="score">Score<span class="ar"></span></th>
-        <th class="num" data-k="close">Close ₹<span class="ar"></span></th>
-        <th class="num" data-k="chg">Chg %<span class="ar"></span></th>
-        <th class="num" data-k="vol_x">Vol ×<span class="ar"></span></th>
-        <th class="num" data-k="deliv">Deliv %<span class="ar"></span></th>
-        <th class="num" data-k="last">Date<span class="ar"></span></th>
-      </tr></thead>
-      <tbody id="rows"><tr><td colspan="9" class="empty">Loading the latest run…</td></tr></tbody>
+      <thead><tr id="thead"></tr></thead>
+      <tbody id="rows"><tr><td class="empty">Loading the latest run…</td></tr></tbody>
     </table>
   </div>
 
   <footer>
-    <div>Data: NSE public files (daily prices and delivery, 52-week highs, bulk and block deals, RSS filings); annual statements from Yahoo Finance via yfinance, refreshed weekly. Updated every two hours from 8 AM to 10 PM IST. Personal research, not advice.</div>
+    <div>Prices, delivery, 52-week highs, deals and filings: NSE public files, updated every two hours from 8 AM to 10 PM IST. Annual and quarterly statements: Yahoo Finance via yfinance, refreshed weekly overnight. Personal research, not advice; check filings before acting.</div>
     <details><summary>Last run log</summary><pre id="log"></pre></details>
   </footer>
 </div>
@@ -184,88 +212,146 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const COLORS=["--s1","--s2","--s3","--s4","--s5","--s6"];
 const fmt=(v,d=1)=>v==null||isNaN(v)?"–":Number(v).toLocaleString("en-IN",{minimumFractionDigits:d,maximumFractionDigits:d});
 const fdate=s=>{if(!s)return"–";const d=new Date(s+"T00:00:00");return isNaN(d)?s:d.toLocaleDateString("en-GB",{day:"numeric",month:"short"})};
-let D=null,SC={},sel=new Set(),mode="any",sortK="score",sortDir=-1,openSym=null;
+function store(k,v){try{localStorage.setItem("sd2:"+k,JSON.stringify(v))}catch(e){}}
+function recall(k,d){try{const v=localStorage.getItem("sd2:"+k);return v==null?d:JSON.parse(v)}catch(e){return d}}
 
-function store(k,v){try{localStorage.setItem("sd:"+k,JSON.stringify(v))}catch(e){}}
-function recall(k,d){try{const v=localStorage.getItem("sd:"+k);return v==null?d:JSON.parse(v)}catch(e){return d}}
+let D=null,SC={},BY={},tab="technical",sel={},mode={},sortK={},sortDir={},openSym=null,recipe=null,custom=null;
+const SHORT={breakout:"Breakout",near_high:"Near high",accumulation:"Accumulation",pullback:"Pullback",base:"Tight base",rs_leaders:"RS leader",
+  quality:"Quality",growth:"Growth",value:"Value",penny:"Penny",turnaround:"Turnaround",dividend:"Dividend",
+  corporate_actions:"Corp action",narrative:"Narrative",bulk_deals:"Bulk deal"};
 
+/* ---------- column sets per section ---------- */
+const pct=(v,d=1)=>v==null?"–":`<span class="${v>=0?"up":"down"}">${v>=0?"+":""}${fmt(v,d)}</span>`;
+const F=s=>s.fund||{};
+const best=s=>{let b=null;for(const i of sel[tab]||[]){const h=s.hits[i];if(h&&(!b||h.score>b.h.score))b={id:i,h}}return b};
+const COL={
+  name:{l:"Company",sort:s=>s.name.toLowerCase(),html:s=>`<td class="co"><b>${esc(s.name)}</b><span>${s.matched===false?"not matched to an NSE symbol":esc(s.symbol)}${s.series&&s.series!=="EQ"?" · "+esc(s.series):""}</span></td>`},
+  screens:{l:"Screens",html:s=>`<td><div class="sigs">${Object.keys(s.hits).filter(i=>SC[i]&&SC[i].group===tab).map(i=>`<span class="sig" style="--c:var(${SC[i].color})"><span class="dot"></span>${esc(SHORT[i]||SC[i].title)}${s.hits[i].alert?'<span class="bell" title="Alert">•</span>':""}</span>`).join("")}</div></td>`},
+  why:{l:"Why it is here",html:s=>`<td class="detail">${[...(sel[tab]||[])].filter(i=>s.hits[i]).sort((x,y)=>s.hits[y].score-s.hits[x].score).map(i=>`<div class="why" style="--c:var(${SC[i].color})"><span class="dot"></span><span>${esc(s.hits[i].summary)}</span></div>`).join("")}</td>`},
+  score:{l:"Score",num:1,sort:s=>{const b=best(s);return b?b.h.score:-1},html:s=>{const b=best(s);return`<td class="num score">${b?b.h.score:"–"}</td>`}},
+  close:{l:"Close ₹",num:1,sort:s=>s.close,html:s=>`<td class="num">${fmt(s.close,2)}</td>`},
+  chg:{l:"Chg %",num:1,sort:s=>s.chg,html:s=>`<td class="num">${pct(s.chg,2)}</td>`},
+  vol_x:{l:"Vol ×",num:1,sort:s=>s.vol_x,html:s=>`<td class="num">${s.vol_x==null?"–":fmt(s.vol_x,1)+"×"}</td>`},
+  deliv:{l:"Deliv %",num:1,sort:s=>s.deliv,html:s=>`<td class="num">${fmt(s.deliv,0)}</td>`},
+  rs:{l:"RS",num:1,sort:s=>s.rs,html:s=>`<td class="num">${s.rs??"–"}</td>`},
+  date:{l:"Date",num:1,sort:s=>{const b=best(s);return b?b.h.date:""},html:s=>{const b=best(s);return`<td class="num dt">${b?fdate(b.h.date):"–"}</td>`}},
+  mcap:{l:"Mcap ₹ cr",num:1,sort:s=>F(s).mcap_cr,html:s=>`<td class="num">${fmt(F(s).mcap_cr,0)}</td>`},
+  pe:{l:"P/E",num:1,sort:s=>F(s).pe,html:s=>`<td class="num">${fmt(F(s).pe,1)}</td>`},
+  pb:{l:"P/B",num:1,sort:s=>F(s).pb,html:s=>`<td class="num">${fmt(F(s).pb,1)}</td>`},
+  roce:{l:"ROCE %",num:1,sort:s=>F(s).roce,html:s=>`<td class="num">${fmt(F(s).roce,0)}</td>`},
+  sales:{l:"Sales gr %",num:1,sort:s=>F(s).sales_cagr,html:s=>`<td class="num">${pct(F(s).sales_cagr,0)}</td>`},
+  techwhy:{l:"Technical signal",html:s=>{const r=pair();const h=s.hits[r.tech];return`<td class="detail"><div class="why" style="--c:var(${SC[r.tech].color})"><span class="dot"></span><span>${esc(h.summary)}</span></div></td>`}},
+  fundwhy:{l:"Fundamental case",html:s=>{const r=pair();const h=s.hits[r.fund];return`<td class="detail"><div class="why" style="--c:var(${SC[r.fund].color})"><span class="dot"></span><span>${esc(h.summary)}</span></div></td>`}},
+  tdate:{l:"Signal date",num:1,sort:s=>s.hits[pair().tech].date,html:s=>`<td class="num dt">${fdate(s.hits[pair().tech].date)}</td>`},
+};
+const COLS={technical:["name","screens","why","score","close","chg","vol_x","deliv","rs","date"],
+  fundamental:["name","screens","why","score","mcap","pe","pb","roce","sales","close"],
+  events:["name","screens","why","score","close","chg","date"],
+  combined:["name","techwhy","fundwhy","close","chg","pe","roce","rs","tdate"]};
+
+/* ---------- filtering ---------- */
+function pair(){return custom||D.recipes.find(r=>r.id===recipe)||D.recipes[0]}
 function visible(){
-  const q=$("q").value.trim().toLowerCase(),ao=$("alertsOnly").checked,ids=[...sel];
+  if(tab==="combined"){
+    const r=pair(),q=$("q2").value.trim().toLowerCase();
+    return D.stocks.filter(s=>s.hits[r.tech]&&s.hits[r.fund]&&(!q||s.name.toLowerCase().includes(q)||s.symbol.toLowerCase().includes(q)));
+  }
+  const ids=[...(sel[tab]||[])],q=$("q").value.trim().toLowerCase(),ao=$("alertsOnly").checked;
+  if(!ids.length)return[];
   return D.stocks.filter(s=>{
-    const hs=Object.keys(s.hits);
-    if(!ids.length)return false;
-    const ok=mode==="any"?ids.some(i=>hs.includes(i)):ids.every(i=>hs.includes(i));
+    const ok=mode[tab]==="all"?ids.every(i=>s.hits[i]):ids.some(i=>s.hits[i]);
     if(!ok)return false;
     if(ao&&!ids.some(i=>s.hits[i]&&s.hits[i].alert))return false;
     return !q||s.name.toLowerCase().includes(q)||s.symbol.toLowerCase().includes(q);
   });
 }
-function bestHit(s){let b=null;for(const i of sel){const h=s.hits[i];if(h&&(!b||h.score>b.h.score))b={id:i,h}}return b}
-function val(s,k){if(k==="score"){const b=bestHit(s);return b?b.h.score:-1}if(k==="last"){const b=bestHit(s);return b?b.h.date:""}if(k==="name")return s.name.toLowerCase();return s[k]??null}
 
+/* ---------- rendering ---------- */
 function render(){
+  const cols=COLS[tab],k=sortK[tab]||(tab==="combined"?"tdate":"score"),dir=sortDir[tab]||-1;
+  $("thead").innerHTML=cols.map(c=>{const C=COL[c];const s=C.sort?` data-k="${c}" aria-sort="${c===k?(dir>0?"ascending":"descending"):"none"}"`:"";return`<th${s} class="${C.num?"num":""}">${C.l}${C.sort?`<span class="ar">${c===k?(dir>0?"↑":"↓"):""}</span>`:""}</th>`}).join("");
   let rows=visible();
-  rows.sort((a,b)=>{const x=val(a,sortK),y=val(b,sortK);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return(x>y?1:x<y?-1:0)*sortDir});
-  document.querySelectorAll("th[data-k]").forEach(th=>{th.querySelector(".ar").textContent=th.dataset.k===sortK?(sortDir>0?"↑":"↓"):"";th.setAttribute("aria-sort",th.dataset.k===sortK?(sortDir>0?"ascending":"descending"):"none")});
-  $("count").textContent=`${rows.length} stock${rows.length===1?"":"s"}`;
-  const names=[...sel].map(i=>SC[i].title);
-  $("ddLabel").textContent=!sel.size?"None":sel.size===D.screens.length?"All":names.join(", ");
-  if(!rows.length){$("rows").innerHTML=`<tr><td colspan="9" class="empty">${!sel.size?"Pick at least one screen.":mode==="all"&&sel.size>1?"No stock is in all of the selected screens. Switch to “any selected”.":"Nothing matches yet. History builds up with each run."}</td></tr>`;return}
-  $("rows").innerHTML=rows.map(s=>{
-    const b=bestHit(s);
-    const sigs=Object.keys(s.hits).filter(i=>SC[i]).map(i=>`<span class="sig" style="--c:var(${SC[i].color})"><span class="dot"></span>${esc(SC[i].short)}${s.hits[i].alert?'<span class="bell" title="Alert">•</span>':""}</span>`).join("");
-    const ch=s.chg==null?"–":`<span class="${s.chg>=0?"up":"down"}">${s.chg>=0?"+":""}${fmt(s.chg,2)}</span>`;
-    return `<tr data-s="${esc(s.symbol)}" class="${s.symbol===openSym?"sel":""}" tabindex="0">
-      <td class="co"><b>${esc(s.name)}</b><span>${s.matched===false?"not matched to an NSE symbol":esc(s.symbol)}${s.series&&s.series!=="EQ"?" · "+esc(s.series):""}</span></td>
-      <td><div class="sigs">${sigs}</div></td>
-      <td class="detail">${[...sel].filter(i=>s.hits[i]).sort((x,y)=>s.hits[y].score-s.hits[x].score).map(i=>`<div class="why" style="--c:var(${SC[i].color})"><span class="dot"></span><span>${esc(s.hits[i].summary)}</span></div>`).join("")}</td>
-      <td class="num score">${b?b.h.score:"–"}</td>
-      <td class="num">${fmt(s.close,2)}</td>
-      <td class="num">${ch}</td>
-      <td class="num">${s.vol_x==null?"–":fmt(s.vol_x,1)+"×"}</td>
-      <td class="num">${s.deliv==null?"–":fmt(s.deliv,0)}</td>
-      <td class="num dt">${b?fdate(b.h.date):"–"}</td></tr>`}).join("");
+  const g=COL[k]&&COL[k].sort;
+  if(g)rows.sort((a,b)=>{const x=g(a),y=g(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return(x>y?1:x<y?-1:0)*dir});
+  const n=`${rows.length} stock${rows.length===1?"":"s"}`;
+  (tab==="combined"?$("count2"):$("count")).textContent=n;
+  if(tab!=="combined"){const ids=[...(sel[tab]||[])],all=BY[tab]||[];$("ddLabel").textContent=!ids.length?"None":ids.length===all.length?"All":ids.map(i=>SHORT[i]||SC[i].title).join(", ")}
+  if(!rows.length){
+    const msg=tab==="combined"?"No stock is on both screens today. Try another recipe or pair.":!(sel[tab]||new Set()).size?"Pick at least one screen.":mode[tab]==="all"&&sel[tab].size>1?"No stock is on all the selected screens. Switch to “any selected”.":"Nothing here yet. Some screens fill in as history and statements build up.";
+    $("rows").innerHTML=`<tr><td colspan="${cols.length}" class="empty">${msg}</td></tr>`;return}
+  $("rows").innerHTML=rows.slice(0,600).map(s=>`<tr data-s="${esc(s.symbol)}" class="${s.symbol===openSym?"sel":""}" tabindex="0">${cols.map(c=>COL[c].html(s)).join("")}</tr>`).join("")
+    +(rows.length>600?`<tr><td colspan="${cols.length}" class="empty">Showing the first 600 of ${rows.length}. Narrow with the screens or search.</td></tr>`:"");
 }
 
+function buildTabs(){
+  const cnt=g=>g==="combined"?D.recipes.reduce((a,r)=>a+r.count,0):new Set(D.stocks.filter(s=>Object.keys(s.hits).some(i=>SC[i]&&SC[i].group===g)).map(s=>s.symbol)).size;
+  $("tabs").innerHTML=D.groups.map(g=>`<button class="tab" role="tab" data-g="${g.id}" aria-selected="${g.id===tab}">${esc(g.title)}<span class="tc">${cnt(g.id)}</span></button>`).join("");
+  const G=D.groups.find(g=>g.id===tab);$("blurb").textContent=G?G.blurb:"";
+  $("single").hidden=tab==="combined";$("combo").hidden=tab!=="combined";
+  if(tab==="combined")buildCombo();else buildSingle();
+}
+function buildSingle(){
+  const ids=BY[tab]||[];
+  $("strip").innerHTML=ids.map(id=>{const s=SC[id];return`<button class="sum ${s.count?"":"zero"}" data-id="${id}" aria-pressed="${sel[tab].has(id)}" style="--c:var(${s.color})"><span class="n">${s.count}</span><span class="t"><span class="dot"></span>${esc(s.title)}</span><span class="d">${esc(s.note)}</span></button>`}).join("")||'<div class="empty">No screens in this section yet.</div>';
+  $("menu").innerHTML=ids.map(id=>`<label style="--c:var(${SC[id].color})"><input type="checkbox" value="${id}" ${sel[tab].has(id)?"checked":""}><span class="dot"></span>${esc(SC[id].title)}<span class="ct">${SC[id].count}</span></label>`).join("")+`<div class="act"><button data-a="all">Select all</button><button data-a="none">Clear</button></div>`;
+  $("rules").innerHTML=ids.map(id=>{const s=SC[id];return`<div><h4 style="--c:var(${s.color})"><span class="dot"></span>${esc(s.title)}</h4><p>${esc(s.description)}</p><ul>${s.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></div>`}).join("");
+  $("mAny").setAttribute("aria-pressed",mode[tab]!=="all");$("mAll").setAttribute("aria-pressed",mode[tab]==="all");
+}
+function buildCombo(){
+  const active=custom?null:(recipe||D.recipes[0].id);
+  $("recipes").innerHTML=D.recipes.map(r=>`<button class="rcp ${r.count?"":"zero"}" data-r="${r.id}" aria-pressed="${r.id===active}">
+    <span class="rt"><span>${esc(r.title)}</span><span class="rn">${r.count}</span></span>
+    <span class="pair"><span class="sig" style="--c:var(${SC[r.tech]?.color||"--s1"})"><span class="dot"></span>${esc(SHORT[r.tech])}</span><span class="plus">+</span><span class="sig" style="--c:var(${SC[r.fund]?.color||"--s2"})"><span class="dot"></span>${esc(SHORT[r.fund])}</span></span>
+    <span class="rw">${esc(r.why)}</span></button>`).join("");
+  const opt=(g,v)=>(BY[g]||[]).map(id=>`<option value="${id}" ${id===v?"selected":""}>${esc(SC[id].title)}</option>`).join("");
+  const p=pair();$("cTech").innerHTML=opt("technical",p.tech);$("cFund").innerHTML=opt("fundamental",p.fund);
+}
+
+/* ---------- side panel ---------- */
 function chart(s){
-  const c=s.spark?.c||[],v=s.spark?.v||[],n=c.length;
-  if(!c.some(x=>x!=null))return '<p style="color:var(--muted);font-size:13px">No price history stored for this stock yet.</p>';
-  const W=470,H=210,ph=140,top=10,vb=50,gap=8;
-  const cs=c.filter(x=>x!=null),lo=Math.min(...cs),hi=Math.max(...cs),pad=(hi-lo)*.08||1;
+  const c=s.spark?.c||[],v=s.spark?.v||[],m=s.spark?.m50||[],n=c.length;
+  if(!c.some(x=>x!=null))return '<p style="color:var(--muted);font-size:13px">No price history stored for this stock.</p>';
+  const W=470,H=210,ph=140,top=10,vb=50;
+  const all=c.concat(m).filter(x=>x!=null),lo=Math.min(...all),hi=Math.max(...all),pad=(hi-lo)*.08||1;
   const y=p=>top+(1-(p-(lo-pad))/((hi+pad)-(lo-pad)))*ph,x=i=>6+i*(W-52)/Math.max(n-1,1);
-  let d="",started=false;c.forEach((p,i)=>{if(p==null){started=false;return}d+=(started?"L":"M")+x(i).toFixed(1)+" "+y(p).toFixed(1);started=true});
-  const vmax=Math.max(...v.filter(x=>x!=null),1),bw=Math.max((W-52)/n-1.5,1.5);
+  const path=a=>{let d="",st=false;a.forEach((p,i)=>{if(p==null){st=false;return}d+=(st?"L":"M")+x(i).toFixed(1)+" "+y(p).toFixed(1);st=true});return d};
+  const vmax=Math.max(...v.filter(q=>q!=null),1),bw=Math.max((W-52)/n-1,1);
   const bars=v.map((q,i)=>q==null?"":`<rect x="${(x(i)-bw/2).toFixed(1)}" y="${(H-(q/vmax)*vb).toFixed(1)}" width="${bw.toFixed(1)}" height="${((q/vmax)*vb).toFixed(1)}" fill="${i===n-1?"var(--accent)":"var(--rule-2)"}"/>`).join("");
-  const last=cs[cs.length-1],dts=D.spark_dates||[];
-  const ticks=[hi,(hi+lo)/2,lo].map(p=>`<line x1="6" x2="${W-46}" y1="${y(p)}" y2="${y(p)}" stroke="var(--rule)" stroke-width="1"/><text x="${W-42}" y="${y(p)+4}" font-size="11" fill="var(--muted)">${fmt(p,p>=1000?0:1)}</text>`).join("");
-  return `<svg viewBox="0 0 ${W} ${H+18}" role="img" aria-label="Price and volume, last ${n} sessions">
-    ${ticks}<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
-    <circle cx="${x(n-1)}" cy="${y(c[n-1]??last)}" r="3.5" fill="var(--accent)"/>
-    <line x1="6" x2="${W-46}" y1="${H-vb-gap/2}" y2="${H-vb-gap/2}" stroke="var(--rule)"/>${bars}
+  const dts=D.spark_dates||[],last=c[n-1];
+  const ticks=[hi,(hi+lo)/2,lo].map(p=>`<line x1="6" x2="${W-46}" y1="${y(p)}" y2="${y(p)}" stroke="var(--rule)"/><text x="${W-42}" y="${y(p)+4}" font-size="11" fill="var(--muted)">${fmt(p,p>=1000?0:1)}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H+18}" role="img" aria-label="Price, 50-day average and volume, last ${n} sessions">${ticks}
+    <path d="${path(m)}" fill="none" stroke="var(--s3)" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <path d="${path(c)}" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
+    ${last!=null?`<circle cx="${x(n-1)}" cy="${y(last)}" r="3.5" fill="var(--accent)"/>`:""}
+    <line x1="6" x2="${W-46}" y1="${H-vb-4}" y2="${H-vb-4}" stroke="var(--rule)"/>${bars}
     <text x="6" y="${H+15}" font-size="11" fill="var(--muted)">${esc(fdate(dts[0]))}</text>
     <text x="${W-46}" y="${H+15}" font-size="11" fill="var(--muted)" text-anchor="end">${esc(fdate(dts[dts.length-1]))}</text>
-    <text x="${W-42}" y="${H-vb+10}" font-size="11" fill="var(--muted)">Vol</text></svg>`;
+    <text x="${W-42}" y="${H-vb+10}" font-size="11" fill="var(--muted)">Vol</text></svg>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">Solid: close · dashed: 50-day average</div>`;
 }
-const LABELS={vol_x:"Volume vs 20-day avg",deliv_pct:"Delivery %",breakout_level:"20-day high broken",turnover_cr:"Traded value ₹ cr",
-  ex_date:"Ex-date",last_buy:"Last day to buy",days_left:"Trading days left",dividend:"Dividend ₹/share",yield_pct:"Yield %",
-  ratio:"Ratio",issue_price:"Issue price ₹",discount_pct:"Discount to market %",points:"Points",filings:"Flagged filings",
-  net_cr:"Net value ₹ cr",buy_cr:"Bought ₹ cr",sell_cr:"Sold ₹ cr",
-  years:"Years of data",roce:"ROCE % (avg)",roe:"ROE % (avg)",sales_cagr:"Sales growth %/yr",profit_cagr:"Profit growth %/yr",
-  cfo_pat:"Cash from ops ÷ profit",de:"Debt to equity",icr:"Interest cover ×",pe:"P/E",peg:"PEG",mcap_cr:"Market cap ₹ cr",
-  debtor_days:"Debtor days (latest)",debtor_days_then:"Debtor days (first year)",data_asof:"Data fetched"};
+const LABELS={vol_x:"Volume vs 20-day avg",deliv_pct:"Delivery %",breakout_level:"20-day high broken",high_52w:"52-week high",gap_pct:"Below high %",vol_20_50:"Volume 20 vs 50-day",
+  deliv_10d:"Delivery 10-day %",deliv_before:"Delivery before %",range_10d_pct:"10-day range %",sma20:"20-day avg",sma50:"50-day avg",sma200:"200-day avg",ret_3m:"3-month return %",ret_6m:"6-month return %",
+  range_15d_pct:"15-day range %",vol_10_50:"Volume 10 vs 50-day",rs:"Relative strength",
+  roce:"ROCE % (avg)",roe:"ROE % (avg)",sales_cagr:"Sales growth %/yr",profit_cagr:"Profit growth %/yr",sales_g1:"Sales growth last yr %",profit_g1:"Profit growth last yr %",
+  q_sales_yoy:"Quarter sales YoY %",q_profit_yoy:"Quarter profit YoY %",cfo_pat:"Cash from ops ÷ profit",de:"Debt to equity",icr:"Interest cover ×",mcap_cr:"Market cap ₹ cr",
+  pe:"P/E",pb:"P/B",peg:"PEG",div_yield:"Dividend yield %",payout:"Payout %",years:"Years of data",asof:"Statements fetched",
+  ex_date:"Ex-date",last_buy:"Last day to buy",days_left:"Trading days left",dividend:"Dividend ₹/share",yield_pct:"Yield %",ratio:"Ratio",issue_price:"Issue price ₹",discount_pct:"Discount to market %",
+  points:"Points",filings:"Flagged filings",net_cr:"Net value ₹ cr",buy_cr:"Bought ₹ cr",sell_cr:"Sold ₹ cr"};
 function kv(m){return Object.entries(m||{}).filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<div><span>${esc(LABELS[k]||k)}</span>${esc(/date|last_buy|asof/.test(k)?fdate(v):typeof v==="number"?fmt(v,Number.isInteger(v)?0:2):v)}</div>`).join("")}
-
 function openPanel(sym){
   const s=D.stocks.find(x=>x.symbol===sym);if(!s)return;openSym=sym;
-  const ch=s.chg==null?"":`<span class="${s.chg>=0?"up":"down"}"> ${s.chg>=0?"+":""}${fmt(s.chg,2)}%</span>`;
-  const blocks=Object.entries(s.hits).filter(([i])=>SC[i]).map(([i,h])=>`<div class="blk" style="--c:var(${SC[i].color})">
-      <div class="bt"><span class="dot"></span>${esc(SC[i].title)}<span style="margin-left:auto;font-weight:400;color:var(--muted);font-size:13px">score ${h.score}${h.alert?' · <span class="bell">alert</span>':""}</span></div>
+  const ch=s.chg==null?"":` ${pct(s.chg,2)}%`;
+  const groups=D.groups.filter(g=>g.id!=="combined").map(g=>g.id);
+  const blocks=Object.entries(s.hits).filter(([i])=>SC[i]).sort((a,b)=>groups.indexOf(SC[a[0]].group)-groups.indexOf(SC[b[0]].group)).map(([i,h])=>`<div class="blk" style="--c:var(${SC[i].color})">
+      <div class="bt"><span class="dot"></span>${esc(SC[i].title)}<span style="margin-left:auto;font-weight:400;color:var(--muted);font-size:13px">${esc(D.groups.find(g=>g.id===SC[i].group).title)} · score ${h.score}${h.alert?' · <span class="bell">alert</span>':""}</span></div>
       <div class="bs">${esc(h.summary)}</div><div class="kv">${kv(h.metrics)}</div></div>`).join("");
+  const f=s.fund;
+  const fund=f?`<section><h3>Fundamentals at a glance</h3><div class="fund">${[["Mcap ₹ cr",fmt(f.mcap_cr,0)],["P/E",fmt(f.pe,1)],["P/B",fmt(f.pb,1)],["ROCE %",fmt(f.roce,0)],["ROE %",fmt(f.roe,0)],["Sales gr %/yr",fmt(f.sales_cagr,0)],["Profit gr %/yr",fmt(f.profit_cagr,0)],["Debt/equity",fmt(f.de,2)],["Cash ÷ profit",fmt(f.cfo_pat,1)],["Div. yield %",fmt(f.div_yield,1)]].map(([l,v])=>`<div><span>${l}</span>${v}</div>`).join("")}</div></section>`:"";
   const ev=(s.events||[]).map(e=>`<div><span class="d">${esc(fdate(e.date))} · ${esc(SC[e.screen]?.title||"")}</span><br>${esc(e.text)}${e.link?` <a href="${esc(e.link)}" target="_blank" rel="noopener">filing ↗</a>`:""}</div>`).join("");
   const isSym=/^[A-Z0-9&\-]+$/.test(s.symbol);
-  $("panel").innerHTML=`<div class="ph"><div><h2>${esc(s.name)}</h2><div class="meta">${esc(s.symbol)}${s.turnover_cr!=null?" · traded ₹"+fmt(s.turnover_cr,1)+" cr":""}</div>
+  $("panel").innerHTML=`<div class="ph"><div><h2>${esc(s.name)}</h2><div class="meta">${esc(s.symbol)}${s.rs?" · RS "+s.rs:""}${s.turnover_cr!=null?" · traded ₹"+fmt(s.turnover_cr,1)+" cr":""}</div>
       ${s.close!=null?`<div class="px">₹${fmt(s.close,2)}${ch}</div>`:""}</div><button class="x" id="closeP" aria-label="Close">×</button></div>
-    <div class="pb"><section class="chart"><h3>Price and volume</h3>${chart(s)}</section>${blocks}
+    <div class="pb"><section class="chart"><h3>Price and volume</h3>${chart(s)}</section>${fund}${blocks}
       ${ev?`<section><h3>Filings and deals</h3><div class="ev">${ev}</div></section>`:""}
       ${isSym?`<section><h3>Look it up</h3><div class="links"><a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener">NSE quote ↗</a><a href="https://www.screener.in/company/${encodeURIComponent(s.symbol)}/" target="_blank" rel="noopener">Screener ↗</a><a href="https://www.tradingview.com/chart/?symbol=NSE%3A${encodeURIComponent(s.symbol)}" target="_blank" rel="noopener">TradingView ↗</a></div></section>`:""}</div>`;
   $("panel").classList.add("open");$("panel").setAttribute("aria-hidden","false");$("scrim").classList.add("on");
@@ -273,42 +359,43 @@ function openPanel(sym){
 }
 function closePanel(){openSym=null;$("panel").classList.remove("open");$("panel").setAttribute("aria-hidden","true");$("scrim").classList.remove("on");render()}
 
-function buildControls(){
-  $("strip").innerHTML=D.screens.map(s=>`<button class="sum" data-id="${s.id}" aria-pressed="${sel.has(s.id)}" style="--c:var(${SC[s.id].color})">
-    <span class="n">${s.count}</span><span class="t"><span class="dot"></span>${esc(s.title)}</span><span class="d">${esc(SC[s.id].today)}</span></button>`).join("");
-  $("menu").innerHTML=D.screens.map(s=>`<label style="--c:var(${SC[s.id].color})"><input type="checkbox" value="${s.id}" ${sel.has(s.id)?"checked":""}><span class="dot"></span>${esc(s.title)}<span class="ct">${s.count}</span></label>`).join("")
-    +`<div class="act"><button data-a="all">Select all</button><button data-a="none">Clear</button></div>`;
-  $("rules").innerHTML=D.screens.map(s=>`<div><h4 style="--c:var(${SC[s.id].color})"><span class="dot"></span>${esc(s.title)}</h4><p>${esc(s.description)}</p><ul>${s.rules.map(r=>`<li>${esc(r)}</li>`).join("")}</ul></div>`).join("");
-}
-function setSel(next){sel=new Set(next);store("sel",[...sel]);buildControls();render()}
+/* ---------- wiring ---------- */
+function setTab(g){tab=g;store("tab",g);if(location.hash!=="#"+g)history.replaceState(null,"","#"+g);buildTabs();render()}
+function setSel(next){sel[tab]=new Set(next);store("sel:"+tab,[...sel[tab]]);buildSingle();render()}
 
 fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{
   D=d;
-  const short={breakout:"Breakout",fundamentals:"Fundamentals",corporate_actions:"Corp action",narrative:"Narrative",bulk_deals:"Bulk deal"};
-  d.screens.forEach((s,i)=>{
+  const gi={};
+  d.screens.forEach(s=>{
+    gi[s.group]=(gi[s.group]||0);
     const latest=d.stocks.filter(x=>x.hits[s.id]).map(x=>x.hits[s.id].date).sort().pop();
-    const n=latest?d.stocks.filter(x=>x.hits[s.id]&&x.hits[s.id].date===latest).length:0;
     const alerts=d.stocks.filter(x=>x.hits[s.id]&&x.hits[s.id].alert).length;
-    SC[s.id]={...s,color:COLORS[i%COLORS.length],short:short[s.id]||s.title,
-      today:s.count?(alerts?`${alerts} on alert · `:"")+`${n} dated ${fdate(latest)}`:"No hits yet"};
+    SC[s.id]={...s,color:COLORS[gi[s.group]++%COLORS.length],
+      note:s.count?(alerts?`${alerts} on alert · `:"")+(s.group==="fundamental"?"statements fetched "+fdate(latest):"latest "+fdate(latest)):"No hits yet"};
+    (BY[s.group]=BY[s.group]||[]).push(s.id);
   });
-  const saved=recall("sel",null);sel=new Set((saved||d.screens.map(s=>s.id)).filter(i=>SC[i]));
-  mode=recall("mode","any");$("mAny").setAttribute("aria-pressed",mode==="any");$("mAll").setAttribute("aria-pressed",mode==="all");
+  d.groups.forEach(g=>{const saved=recall("sel:"+g.id,null);sel[g.id]=new Set((saved||BY[g.id]||[]).filter(i=>SC[i]));mode[g.id]=recall("mode:"+g.id,"any")});
+  recipe=recall("recipe",d.recipes[0]&&d.recipes[0].id);
+  const h=location.hash.slice(1);tab=d.groups.some(g=>g.id===h)?h:recall("tab","technical");
   const st=d.status||{};
-  $("status").innerHTML=`<span>Updated <b>${esc(d.generated)}</b></span><span>Prices <b>${esc(st.prices||"–")}</b></span><span>Filings <b class="${/^0\//.test(st.feeds||"")?"bad":""}">${esc(st.feeds||"–")}</b></span><span>Fundamentals <b>${esc(st.fundamentals||"–")}</b></span>`;
+  $("status").innerHTML=`<span>Results changed <b>${esc(d.generated)}</b></span><span>Prices <b>${esc(st.prices||"–")}</b></span><span>Filings <b class="${/^0\//.test(st.feeds||"")?"bad":""}">${esc(st.feeds||"–")}</b></span><span>Statements <b>${esc(st.fundamentals||"–")}</b></span>`;
   $("log").textContent=(d.log||[]).join("\n");
-  buildControls();render();
-}).catch(()=>{$("status").textContent="No data yet. The first run publishes it.";$("rows").innerHTML='<tr><td colspan="9" class="empty">Waiting for the first run.</td></tr>'});
+  buildTabs();render();
+}).catch(()=>{$("status").textContent="No data yet. The first run publishes it.";$("rows").innerHTML='<tr><td class="empty">Waiting for the first run.</td></tr>'});
 
-$("strip").addEventListener("click",e=>{const b=e.target.closest(".sum");if(!b)return;const n=new Set(sel);n.has(b.dataset.id)?n.delete(b.dataset.id):n.add(b.dataset.id);setSel(n)});
+$("tabs").addEventListener("click",e=>{const t=e.target.closest(".tab");if(t)setTab(t.dataset.g)});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(D&&D.groups.some(g=>g.id===h)&&h!==tab)setTab(h)});
+$("strip").addEventListener("click",e=>{const b=e.target.closest(".sum");if(!b)return;const n=new Set(sel[tab]);n.has(b.dataset.id)?n.delete(b.dataset.id):n.add(b.dataset.id);setSel(n)});
 $("ddBtn").addEventListener("click",e=>{e.stopPropagation();const m=$("menu");m.hidden=!m.hidden;$("ddBtn").setAttribute("aria-expanded",!m.hidden)});
-$("menu").addEventListener("click",e=>{e.stopPropagation();const a=e.target.closest("button[data-a]");if(a){setSel(a.dataset.a==="all"?D.screens.map(s=>s.id):[]);$("menu").hidden=false}});
-$("menu").addEventListener("change",e=>{const n=new Set(sel);e.target.checked?n.add(e.target.value):n.delete(e.target.value);setSel(n);$("menu").hidden=false});
+$("menu").addEventListener("click",e=>{e.stopPropagation();const a=e.target.closest("button[data-a]");if(a){setSel(a.dataset.a==="all"?BY[tab]:[]);$("menu").hidden=false}});
+$("menu").addEventListener("change",e=>{const n=new Set(sel[tab]);e.target.checked?n.add(e.target.value):n.delete(e.target.value);setSel(n);$("menu").hidden=false});
 document.addEventListener("click",()=>{$("menu").hidden=true;$("ddBtn").setAttribute("aria-expanded","false")});
-[["mAny","any"],["mAll","all"]].forEach(([id,m])=>$(id).addEventListener("click",()=>{mode=m;store("mode",m);$("mAny").setAttribute("aria-pressed",m==="any");$("mAll").setAttribute("aria-pressed",m==="all");render()}));
-$("q").addEventListener("input",render);$("alertsOnly").addEventListener("change",render);
-document.querySelectorAll("th[data-k]").forEach(th=>th.addEventListener("click",()=>{const k=th.dataset.k;sortDir=k===sortK?-sortDir:(k==="name"?1:-1);sortK=k;render()}));
-$("rows").addEventListener("click",e=>{const r=e.target.closest("tr[data-s]");if(r)openPanel(r.dataset.s)});
+[["mAny","any"],["mAll","all"]].forEach(([id,m])=>$(id).addEventListener("click",()=>{mode[tab]=m;store("mode:"+tab,m);buildSingle();render()}));
+$("q").addEventListener("input",render);$("q2").addEventListener("input",render);$("alertsOnly").addEventListener("change",render);
+$("recipes").addEventListener("click",e=>{const b=e.target.closest(".rcp");if(!b)return;recipe=b.dataset.r;custom=null;store("recipe",recipe);buildCombo();render()});
+["cTech","cFund"].forEach(id=>$(id).addEventListener("change",()=>{custom={tech:$("cTech").value,fund:$("cFund").value};buildCombo();render()}));
+$("thead").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(!th)return;const k=th.dataset.k;sortDir[tab]=(sortK[tab]||"")===k?-(sortDir[tab]||-1):(k==="name"?1:-1);sortK[tab]=k;render()});
+$("rows").addEventListener("click",e=>{const r=e.target.closest("tr[data-s]");if(r&&!e.target.closest("a"))openPanel(r.dataset.s)});
 $("rows").addEventListener("keydown",e=>{const r=e.target.closest("tr[data-s]");if(r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openPanel(r.dataset.s)}});
 $("scrim").addEventListener("click",closePanel);
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&openSym)closePanel()});
