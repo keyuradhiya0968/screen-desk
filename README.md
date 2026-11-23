@@ -10,6 +10,7 @@ Personal stock screens for Indian equities, built only from public NSE files. Ru
 | Corporate actions | `screener/screen_corporate_actions.py` | Upcoming dividends, splits, bonus and rights with the last day to buy; alerts on dividends yielding ≥ 3% with ≥ 2 trading days left |
 | Narrative / operator | `screener/screen_narrative.py` | Control changes, preferential issues/warrants, exchange volume queries, order headlines; alert at 5 points |
 | Bulk & block deals | `screener/screen_bulk_deals.py` | Large disclosed trades over 10 sessions, netted per stock |
+| Fundamentally good | `screener/screen_fundamentals.py` | 10-point scorecard: ROCE, ROE, sales and profit growth, cash conversion, debt, interest cover, PEG. Listed from 6, alert at 8 |
 
 Each screen keeps its numbers in a `P = {...}` block (or constants) at the top of its file.
 
@@ -25,6 +26,7 @@ Each screen keeps its numbers in a `P = {...}` block (or constants) at the top o
 - Bulk and block deals: `bulk.csv`, `block.csv`
 - Filings and corporate actions: NSE RSS feeds
 - Stock list: `EQUITY_L.csv`, `SME_EQUITY_L.csv`
+- Annual statements: Yahoo Finance via yfinance (free, unofficial), fetched nightly by `screener/fundamentals_fetch.py` into `data/fundamentals/`, each stock about once a week
 
 NSE sometimes refuses a whole run; the next run usually gets through, and the dashboard keeps the last good data.
 

@@ -170,7 +170,7 @@ footer pre{white-space:pre-wrap;font-size:12px;background:var(--card);border:1px
   </div>
 
   <footer>
-    <div>Data: NSE public files (daily prices and delivery, 52-week highs, bulk and block deals, RSS filings). Updated every two hours from 8 AM to 10 PM IST. Personal research, not advice.</div>
+    <div>Data: NSE public files (daily prices and delivery, 52-week highs, bulk and block deals, RSS filings); annual statements from Yahoo Finance via yfinance, refreshed weekly. Updated every two hours from 8 AM to 10 PM IST. Personal research, not advice.</div>
     <details><summary>Last run log</summary><pre id="log"></pre></details>
   </footer>
 </div>
@@ -249,8 +249,11 @@ function chart(s){
 const LABELS={vol_x:"Volume vs 20-day avg",deliv_pct:"Delivery %",breakout_level:"20-day high broken",turnover_cr:"Traded value ₹ cr",
   ex_date:"Ex-date",last_buy:"Last day to buy",days_left:"Trading days left",dividend:"Dividend ₹/share",yield_pct:"Yield %",
   ratio:"Ratio",issue_price:"Issue price ₹",discount_pct:"Discount to market %",points:"Points",filings:"Flagged filings",
-  net_cr:"Net value ₹ cr",buy_cr:"Bought ₹ cr",sell_cr:"Sold ₹ cr"};
-function kv(m){return Object.entries(m||{}).filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<div><span>${esc(LABELS[k]||k)}</span>${esc(/date|last_buy/.test(k)?fdate(v):typeof v==="number"?fmt(v,Number.isInteger(v)?0:2):v)}</div>`).join("")}
+  net_cr:"Net value ₹ cr",buy_cr:"Bought ₹ cr",sell_cr:"Sold ₹ cr",
+  years:"Years of data",roce:"ROCE % (avg)",roe:"ROE % (avg)",sales_cagr:"Sales growth %/yr",profit_cagr:"Profit growth %/yr",
+  cfo_pat:"Cash from ops ÷ profit",de:"Debt to equity",icr:"Interest cover ×",pe:"P/E",peg:"PEG",mcap_cr:"Market cap ₹ cr",
+  debtor_days:"Debtor days (latest)",debtor_days_then:"Debtor days (first year)",data_asof:"Data fetched"};
+function kv(m){return Object.entries(m||{}).filter(([,v])=>v!=null&&v!=="").map(([k,v])=>`<div><span>${esc(LABELS[k]||k)}</span>${esc(/date|last_buy|asof/.test(k)?fdate(v):typeof v==="number"?fmt(v,Number.isInteger(v)?0:2):v)}</div>`).join("")}
 
 function openPanel(sym){
   const s=D.stocks.find(x=>x.symbol===sym);if(!s)return;openSym=sym;
@@ -281,7 +284,7 @@ function setSel(next){sel=new Set(next);store("sel",[...sel]);buildControls();re
 
 fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{
   D=d;
-  const short={breakout:"Breakout",corporate_actions:"Corp action",narrative:"Narrative",bulk_deals:"Bulk deal"};
+  const short={breakout:"Breakout",fundamentals:"Fundamentals",corporate_actions:"Corp action",narrative:"Narrative",bulk_deals:"Bulk deal"};
   d.screens.forEach((s,i)=>{
     const latest=d.stocks.filter(x=>x.hits[s.id]).map(x=>x.hits[s.id].date).sort().pop();
     const n=latest?d.stocks.filter(x=>x.hits[s.id]&&x.hits[s.id].date===latest).length:0;
@@ -292,7 +295,7 @@ fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{
   const saved=recall("sel",null);sel=new Set((saved||d.screens.map(s=>s.id)).filter(i=>SC[i]));
   mode=recall("mode","any");$("mAny").setAttribute("aria-pressed",mode==="any");$("mAll").setAttribute("aria-pressed",mode==="all");
   const st=d.status||{};
-  $("status").innerHTML=`<span>Updated <b>${esc(d.generated)}</b></span><span>Prices <b>${esc(st.prices||"–")}</b></span><span>Filings <b class="${/^0\//.test(st.feeds||"")?"bad":""}">${esc(st.feeds||"–")}</b></span>`;
+  $("status").innerHTML=`<span>Updated <b>${esc(d.generated)}</b></span><span>Prices <b>${esc(st.prices||"–")}</b></span><span>Filings <b class="${/^0\//.test(st.feeds||"")?"bad":""}">${esc(st.feeds||"–")}</b></span><span>Fundamentals <b>${esc(st.fundamentals||"–")}</b></span>`;
   $("log").textContent=(d.log||[]).join("\n");
   buildControls();render();
 }).catch(()=>{$("status").textContent="No data yet. The first run publishes it.";$("rows").innerHTML='<tr><td colspan="9" class="empty">Waiting for the first run.</td></tr>'});

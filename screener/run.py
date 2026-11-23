@@ -16,9 +16,9 @@ from pathlib import Path
 import requests
 
 from . import nse
-from . import screen_breakout, screen_bulk_deals, screen_corporate_actions, screen_narrative
+from . import screen_breakout, screen_bulk_deals, screen_corporate_actions, screen_fundamentals, screen_narrative
 
-SCREENS = [screen_breakout, screen_corporate_actions, screen_narrative, screen_bulk_deals]
+SCREENS = [screen_breakout, screen_fundamentals, screen_corporate_actions, screen_narrative, screen_bulk_deals]
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA, DOCS = ROOT / "data", ROOT / "docs"
@@ -241,7 +241,10 @@ def main():
 
     ctx = {"today": today, "dates": dates, "px": px, "w52_new_highs": w52,
            "last_price": px[dates[-1]] if dates else {}, "filings": filings,
-           "corp_actions": actions, "deals": deals}
+           "corp_actions": actions, "deals": deals,
+           "fundamentals": {p.stem: load(p, {}) for p in (DATA / "fundamentals").glob("*.json")}}
+    fstored = len(ctx["fundamentals"])
+    status["fundamentals"] = f"{fstored} stocks" if fstored else "first nightly fetch pending"
 
     stocks_out, screens_out = {}, []
     for scr in SCREENS:
@@ -258,6 +261,7 @@ def main():
             prev = s["hits"].get(scr.ID)
             if not prev or h["date"] > prev["date"]:
                 s["hits"][scr.ID] = {k: h[k] for k in ("score", "tags", "summary", "metrics", "date", "alert")}
+                s["hits"][scr.ID]["alert_key"] = h.get("alert_key", h["date"])
             for e in h.get("events", []):
                 s["events"].append({**e, "screen": scr.ID})
 
@@ -287,7 +291,7 @@ def main():
     lines = []
     for sym, s in sorted(stocks_out.items(), key=lambda kv: -kv[1]["score"]):
         for sid, h in s["hits"].items():
-            key = f"{sid}:{sym}:{h['date']}"
+            key = f"{sid}:{sym}:{h.pop('alert_key', h['date'])}"
             if h["alert"] and key not in sent:
                 sent.add(key)
                 title = next(x["title"] for x in screens_out if x["id"] == sid)
